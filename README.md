@@ -75,10 +75,6 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
   ![The passage editor testing a new Deployed locally step on a landed task: where the task would be, and the local deploy's output](docs/screenshots/passage-editor.png)
 
-- 🔍 **Guided PR review.** The important changes first, with why each was made.
-
-  ![Pull request review: the review guide's summary, the changes to read first with why each was made, and a box to ask the review agent](docs/screenshots/review.png)
-
 - 🖥️ **Live preview.** Click around the real app and send feedback to the worker.
 
   ![A live preview of the app under review, with feedback sent to the worker and Firstmate's reply beside it](docs/screenshots/preview.png)
@@ -124,7 +120,6 @@ Node.js 22 or newer, a Firstmate home, and `tmux` and Claude Code on your `PATH`
 ### How the agents run
 
 - **Decisions** answers go to Firstmate as messages; an answered card leaves at once, from the Decisions page, On deck and the task page, which all show the same decision box. When a question's text lists options (A/B/C, or numbered calls), the card shows them as choices with the recommended one picked, and **Send picks** sends your picks. Keys: `j`/`k` move, `a`/`f`/`s` answer (`a` sends the picks), `l` ask later, `c` close, Enter for evidence.
-- **PR review** runs your own `claude` read-only with no tools, on request. Each run shows its cost, and a guide is cached per PR version.
 - **Passage** checks that run a command stay off until you allow exactly those commands.
 - **Improvements** needs improve's Wheelhouse plugin: `wheelhouse plugin install chrisjowen/improve`.
 - **Secrets** reach the crew by name with `wh-vault`, installed alongside `wheelhouse`: values stay in the macOS login Keychain, and `wh-vault run -- <command>` gives one command its project's granted secrets. The **Vault** page shows names, grants and use, never a value, and is where you add secrets and choose which projects may use each. Grants limit accidents and prompt injection, not a worker set on getting a secret.

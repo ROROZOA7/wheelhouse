@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { TaskSummary } from '$lib/types';
 	import { plural } from '$lib/format';
-	import { Compass, MessageCircleQuestion } from '@lucide/svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
+	import { Compass, ExternalLink, MessageCircleQuestion } from '@lucide/svelte';
 	import StageTrack from '../StageTrack.svelte';
 	import { dotClass, textClass, tone } from '../tone';
 
 	let { task, projectName }: { task: TaskSummary; projectName: string } = $props();
 	const t = $derived(tone(task));
+	// The project's plugin review tab while one is on, else the PR on GitHub.
+	const prLink = $derived(task.pr ? pullRequests.review(task.projectId, task.pr) : null);
 	const asked = $derived(task.build?.questions ?? 0);
 	const open = $derived(task.build?.open ?? 0);
 </script>
@@ -45,14 +48,16 @@
 				>{/if}
 		</p>
 	{/if}
-	{#if task.pr}
+	{#if prLink && task.pr}
 		<a
-			href="/tasks/{encodeURIComponent(task.id)}/review"
+			href={prLink.href}
+			target={prLink.external ? '_blank' : undefined}
+			rel={prLink.external ? 'noreferrer' : undefined}
 			class="relative z-10 mt-2 inline-flex items-center gap-1.5 self-start text-xs text-sea hover:underline"
 			data-review-pr
 			><Compass class="size-3.5" aria-hidden="true" />Review PR{task.pr.number
 				? ` #${task.pr.number}`
-				: ''}</a
+				: ''}{#if prLink.external}<ExternalLink class="size-3" aria-hidden="true" />{/if}</a
 		>
 	{/if}
 </article>

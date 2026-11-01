@@ -1,13 +1,11 @@
 import { page } from '$app/state';
-import type { ReviewEvent } from '$lib/prreview';
 import type { FleetView, Health, MessagesView, ShipAlert } from '$lib/types';
 import { watchedStream, type Connection } from './stream';
 
 /**
- * Live fleet, health, messages, ship's bell alerts and the PR review's answers
- * as they stream, from the server's SSE stream (/api/events). Pages render
- * the server-loaded data first and switch to the live copy once the stream
- * delivers.
+ * Live fleet, health, messages and ship's bell alerts as they stream, from
+ * the server's SSE stream (/api/events). Pages render the server-loaded data
+ * first and switch to the live copy once the stream delivers.
  *
  * One stream per browser, not per tab: browsers allow only six connections to
  * a server, and a stream per tab used them up and hung navigation. The tabs
@@ -34,7 +32,6 @@ type StreamEvent =
 	| { type: 'fleet'; data: FleetView }
 	| { type: 'health'; data: Health }
 	| { type: 'messages'; data: MessagesView }
-	| { type: 'review'; data: ReviewEvent }
 	/** Which server process is answering: a new id means Wheelhouse restarted. */
 	| { type: 'server'; data: { id: string } }
 	| AlertEvent;
@@ -75,8 +72,6 @@ export class Live {
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	private alertListeners = new Set<(e: AlertEvent) => void>();
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
-	private reviewers = new Set<(e: ReviewEvent) => void>();
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	private restartListeners = new Set<() => void>();
 	/** The server process this page has been talking to. */
 	private serverId: string | null = null;
@@ -96,15 +91,6 @@ export class Live {
 	onAlert(fn: (e: AlertEvent) => void): () => void {
 		this.alertListeners.add(fn);
 		return () => this.alertListeners.delete(fn);
-	}
-
-	/**
-	 * PR review updates (`review` events) on this same connection: a feature
-	 * that needs live updates listens here rather than opening its own stream.
-	 */
-	onReview(fn: (e: ReviewEvent) => void): () => void {
-		this.reviewers.add(fn);
-		return () => this.reviewers.delete(fn);
 	}
 
 	/** Called in every tab when the stream comes back from a restarted server. */
@@ -184,7 +170,6 @@ export class Live {
 			on('fleet', (data) => ({ type: 'fleet', data: data as FleetView }));
 			on('health', (data) => ({ type: 'health', data: data as Health }));
 			on('messages', (data) => ({ type: 'messages', data: data as MessagesView }));
-			on('review', (data) => ({ type: 'review', data: data as ReviewEvent }));
 			on('alert', (data) => ({
 				type: 'alert',
 				data: data as ShipAlert,
@@ -211,7 +196,6 @@ export class Live {
 		else if (ev.type === 'settled') this.recentAlerts.delete(ev.data);
 		else if (ev.type === 'alerts')
 			for (const a of ev.data) this.recentAlerts.set(a.alert.id, a.alert);
-		else if (ev.type === 'review') return;
 		else this.latest[ev.type] = ev.data as never;
 		for (const id of [...this.recentAlerts.keys()].slice(0, -RECENT_KEPT)) {
 			this.recentAlerts.delete(id);
@@ -244,9 +228,6 @@ export class Live {
 				break;
 			case 'messages':
 				this.messages = ev.data;
-				break;
-			case 'review':
-				for (const fn of this.reviewers) fn(ev.data);
 				break;
 			case 'server': {
 				const restarted = this.serverId !== null && this.serverId !== ev.data.id;

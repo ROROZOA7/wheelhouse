@@ -50,7 +50,7 @@ const agree = async () => true;
 describe('the restart endpoint', () => {
 	it('restarts only on a POST carrying the token, after answering', async () => {
 		const restarts = { n: 0 };
-		const url = await serve('secret', restarts, ['a PR review agent on t-1']);
+		const url = await serve('secret', restarts, ['the engine service, still starting']);
 		const at = new URL(RESTART_PATH, url);
 		const right = { authorization: 'Bearer secret' };
 		expect((await fetch(at, { method: 'PUT', headers: right })).status).toBe(405);
@@ -60,7 +60,7 @@ describe('the restart endpoint', () => {
 		expect((await fetch(at, { method: 'POST', headers: wrong })).status).toBe(403);
 		expect((await fetch(new URL('/api/health', url))).status).toBe(404);
 		const asked = await fetch(at, { headers: right });
-		expect(await asked.json()).toEqual({ busy: ['a PR review agent on t-1'] });
+		expect(await asked.json()).toEqual({ busy: ['the engine service, still starting'] });
 		expect(restarts.n).toBe(0);
 		expect((await fetch(at, { method: 'POST', headers: right })).status).toBe(202);
 		expect(restarts.n).toBe(1);
@@ -85,12 +85,12 @@ describe('restarting the Wheelhouses that load from a plugins directory', () => 
 
 	it('restarts one with work in progress only when told to', async () => {
 		const restarts = { n: 0 };
-		const url = await serve('t1', restarts, ['a PR review agent on t-1']);
+		const url = await serve('t1', restarts, ['the engine service, still starting']);
 		writeRunning(dir, { pid: process.pid, url, token: 't1' });
 		const seen: [string, string[]][] = [];
 		const decline = async (u: string, busy: string[]) => (seen.push([u, busy]), false);
 		expect(await requestRestart(dir, decline)).toEqual({ restarted: [], failed: [], kept: [url] });
-		expect(seen).toEqual([[url, ['a PR review agent on t-1']]]);
+		expect(seen).toEqual([[url, ['the engine service, still starting']]]);
 		expect(restarts.n).toBe(0);
 		expect(await requestRestart(dir, agree)).toEqual({ restarted: [url], failed: [], kept: [] });
 		expect(restarts.n).toBe(1);

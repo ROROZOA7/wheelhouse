@@ -17,8 +17,8 @@ const HEARTBEAT_MS = 15_000;
  * notices a restart), the current fleet, health, messages and recent ship's
  * bell alerts (`alerts`) on connect, then fleet and health every collector
  * round, messages whenever they change, each new alert (`alert`) as the bell
- * raises it, the id of a session question once it is answered (`settled`),
- * and `review` while the PR review agent is answering. A browser opens one of
+ * raises it, and the id of a session question once it is answered
+ * (`settled`). A browser opens one of
  * these and its tabs share it (see lib/client/live.svelte.ts).
  */
 export const GET: RequestHandler = async ({ request }) => {
@@ -54,10 +54,6 @@ export const GET: RequestHandler = async ({ request }) => {
 			event({ type: 'messages', data: messages });
 			const unsubscribe = runtime.configured ? runtime.collector.subscribe(event) : () => {};
 			const unring = runtime.configured ? runtime.bell.subscribe(event) : () => {};
-			// The PR review's live answers share this stream (one connection per browser).
-			const unreview = runtime.configured
-				? runtime.review.subscribe((e) => send(`event: review\ndata: ${JSON.stringify(e)}\n\n`))
-				: () => {};
 			const heartbeat = setInterval(() => send(': keep-alive\n\n'), HEARTBEAT_MS);
 			cleanup = () => {
 				if (closed) return;
@@ -65,7 +61,6 @@ export const GET: RequestHandler = async ({ request }) => {
 				clearInterval(heartbeat);
 				unsubscribe();
 				unring();
-				unreview();
 				try {
 					controller.close();
 				} catch {

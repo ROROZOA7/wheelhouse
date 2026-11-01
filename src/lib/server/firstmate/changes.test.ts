@@ -11,7 +11,6 @@ import {
 import { LedgerReader, type LedgerTask } from './ledger';
 import { answerText, optionsFor, type InboxCard } from '../../inbox';
 import { feedbackNote } from '../../preview';
-import { changeNote } from '../../prreview';
 import type { BridgeMessage } from '../../types';
 
 const PR = 'https://github.com/o/r/pull/2';
@@ -108,7 +107,7 @@ describe('readyTimes', () => {
 });
 
 describe('wheelhouseRequest', () => {
-	it('reads preview feedback, a change asked from the PR review and a Decisions Fix', () => {
+	it('reads preview feedback, a change asked from the old PR review and a Decisions Fix', () => {
 		expect(
 			wheelhouseRequest(message({ at: 1, text: feedbackNote('http://127.0.0.1:4436/', 'Bigger') }))
 		).toEqual({ kind: 'preview', text: 'Bigger', where: null });
@@ -116,7 +115,7 @@ describe('wheelhouseRequest', () => {
 			wheelhouseRequest(
 				message({
 					at: 1,
-					text: changeNote({ url: PR }, { path: 'src/a.ts', newStart: 12 }, 'Use a const')
+					text: `Change requested from the PR review (${PR}) at src/a.ts, line 12:\nUse a const`
 				})
 			)
 		).toEqual({ kind: 'pr-review', text: 'Use a const', where: { path: 'src/a.ts', line: 12 } });

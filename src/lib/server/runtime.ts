@@ -27,8 +27,6 @@ import {
 } from './issues/watch';
 import { BuildReader } from './buildlog/reader';
 import { usableRoots, type FileRoots } from './files/docfile';
-import { reviewAgentConfig } from './prreview/config';
-import { ReviewService } from './prreview/service';
 import { BUILTIN_PLUGINS } from './plugins/builtin';
 import {
 	changePlugin,
@@ -81,6 +79,7 @@ import type {
 	TimeView
 } from '../types';
 import type { PluginPageView, PluginsView, ServiceView, SlotView } from '../plugins/types';
+import type { PullRequestTabs } from '../plugins/pullrequests';
 import type { InboxView } from '../inbox';
 import type { GatewayChannel, GatewayView } from '../gateway';
 
@@ -125,7 +124,6 @@ export type Runtime =
 			insights: InsightsService;
 			build: BuildReader;
 			inbox: InboxService;
-			review: ReviewService;
 			/** The messaging gateway (Discord); null when there is no messenger to route through. */
 			gateway: Gateway | null;
 			/** Changes made on the Vault page, through the bundled wh-vault. */
@@ -314,17 +312,6 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		sandbox: (key, csp) => sandbox.url(key, csp),
 		version
 	});
-	const stateDir = defaultStateDir(env);
-	const review = new ReviewService({
-		homeDir: install.homeDir,
-		// Kept per home, beside its message store.
-		stateDir: isInside(stateDir, install.homeDir)
-			? null
-			: path.dirname(storeFileFor(stateDir, install.homeDir)),
-		env,
-		useGh: env.WHEELHOUSE_NO_GH !== '1',
-		agent: reviewAgentConfig(env)
-	});
 	// A server the CLI's watcher restarted leaves Firstmate as it is (cli/supervise.ts).
 	if (env.WHEELHOUSE_RESTARTED === '1') {
 		console.log('Firstmate:  left as it is; Wheelhouse only restarted its own server.');
@@ -372,7 +359,6 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		insights,
 		build,
 		inbox,
-		review,
 		gateway,
 		vault,
 		hosts
@@ -648,14 +634,11 @@ export function requestRuntime(req: IncomingMessage, res: ServerResponse): boole
 	return true;
 }
 
-/** What shutting down would stop: PR review runs and plugin services still starting. */
+/** What shutting down would stop: plugin services still starting. */
 export async function busyRuntime(): Promise<string[]> {
 	const r = await g[KEY]?.runtime;
 	if (!r?.configured) return [];
-	return [
-		...r.review.runningTasks().map((t) => `a PR review agent on ${t}`),
-		...(r.services?.starting() ?? []).map((k) => `the ${k} service, still starting`)
-	];
+	return [...(r.services?.starting() ?? []).map((k) => `the ${k} service, still starting`)];
 }
 
 /**
@@ -673,7 +656,6 @@ export function shutdownRuntime(): void {
 			r.collector.stop();
 			r.terminals.close();
 			r.chat.stop();
-			r.review.stopAll();
 			r.sandbox.close();
 			r.gateway?.stop();
 		}
@@ -1030,6 +1012,12 @@ export async function currentGateway(): Promise<GatewayView> {
 export async function currentAddressRewrites(): Promise<string[]> {
 	const r = await getRuntime();
 	return r.configured ? r.plugins.addressRewrites() : [];
+}
+
+/** Per project, the plugin tab its pull requests open in for review (see lib/plugins/pullrequests.ts). */
+export async function currentPullRequestTabs(): Promise<PullRequestTabs> {
+	const r = await getRuntime();
+	return r.configured ? r.plugins.pullRequestTabs() : {};
 }
 
 /** Every open question in one stack (see server/inbox). */

@@ -50,7 +50,7 @@ function service(over: Record<string, string> = {}) {
 				return { code: 0, output: '' };
 			}
 		},
-		busy: async () => ['a PR review agent on wheelhouse#70'],
+		busy: async () => ['the engine service, still starting'],
 		now: () => now,
 		log: () => {}
 	});
@@ -274,7 +274,7 @@ describe('plugin updates', () => {
 		const v = await s.plugins();
 		expect(v.checking).toBe(true);
 		expect(v.checkedAt).toBe(first);
-		expect(v.busy).toEqual(['a PR review agent on wheelhouse#70']);
+		expect(v.busy).toEqual(['the engine service, still starting']);
 	});
 });
 

@@ -14,11 +14,14 @@
 	import ShotStrip from './ShotStrip.svelte';
 	import StageTrack from './StageTrack.svelte';
 	import Thumb from './Thumb.svelte';
-	import { Compass } from '@lucide/svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
+	import { Compass, ExternalLink } from '@lucide/svelte';
 	import { tone, textClass } from './tone';
 
 	let { task, projectName = null }: { task: TaskSummary; projectName?: string | null } = $props();
 	const t = $derived(tone(task));
+	// The project's plugin review tab while one is on, else the PR on GitHub.
+	const prLink = $derived(task.pr ? pullRequests.review(task.projectId, task.pr) : null);
 	// Questions asked about the task and the docs its session referenced, in a few words.
 	const hint = $derived(hintLine(task.build));
 	// A variable, not a literal: Svelte trims the spaces of a bare " · " inside a block.
@@ -173,15 +176,17 @@
 				data-card-changes>Run {run?.n}: {changes}</a
 			>
 		{/if}
-		{#if task.pr}
-			<!-- The PR with the review agent's guide; opens the review page, not GitHub. -->
+		{#if prLink && task.pr}
+			<!-- The PR in a plugin's review tab while one is on, else on GitHub. -->
 			<a
-				href="/tasks/{encodeURIComponent(task.id)}/review"
+				href={prLink.href}
+				target={prLink.external ? '_blank' : undefined}
+				rel={prLink.external ? 'noreferrer' : undefined}
 				class="relative z-10 mt-3 inline-flex items-center gap-1.5 text-xs text-sea hover:underline"
 				data-review-pr
 				><Compass class="size-3.5" aria-hidden="true" />Review PR{task.pr.number
 					? ` #${task.pr.number}`
-					: ''}</a
+					: ''}{#if prLink.external}<ExternalLink class="size-3" aria-hidden="true" />{/if}</a
 			>
 		{/if}
 		{#if task.preview}<CardPreview {task} />{/if}

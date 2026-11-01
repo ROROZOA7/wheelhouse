@@ -289,6 +289,14 @@ describe('wheelhouse open', () => {
 		expect((await fetch(`${base}/api/tasks/nope`)).status).toBe(404);
 	});
 
+	it('sends the old PR review address to the pull request, with no review plugin on', async () => {
+		const review = await fetch(`${base}/tasks/wh-1/review`, { redirect: 'manual' });
+		expect(review.status).toBe(307);
+		expect(review.headers.get('location')).toBe('https://github.com/o/r/pull/7');
+		const none = await fetch(`${base}/tasks/nope/review`, { redirect: 'manual' });
+		expect(none.headers.get('location')).toBe('/tasks/nope');
+	});
+
 	it('renders the Harbour’s project cards, and a project’s own page with its work', async () => {
 		// The Harbour is every project's card; the project's card names what waits on you.
 		const board = await fetch(`${base}/harbour`);

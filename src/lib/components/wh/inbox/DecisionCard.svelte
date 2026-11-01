@@ -18,6 +18,7 @@
 	import {
 		ChevronDown,
 		Clock,
+		Compass,
 		ExternalLink,
 		FileText,
 		GitPullRequest,
@@ -31,6 +32,7 @@
 		X
 	} from '@lucide/svelte';
 	import { ago } from '$lib/format';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import { markdown } from '$lib/chat/markdown';
 	import {
 		WRITTEN_MAX,
@@ -105,6 +107,8 @@
 	const rec = $derived(card.recommendation);
 	const ev = $derived(card.evidence);
 	const href = $derived(`/tasks/${encodeURIComponent(card.taskId)}`);
+	// Review opens the PR in a plugin's review tab while one is on for the project, else on GitHub.
+	const prLink = $derived(ev.pr ? pullRequests.review(card.projectId, ev.pr) : null);
 	const meaning = (c: InboxChoice) => card.options.find((o) => o.choice === c)?.meaning ?? '';
 	const canClose = $derived(!!onClose && closable(card));
 	const CLOSE_MEANING = 'No answer needed: Firstmate records it closed.';
@@ -446,6 +450,20 @@
 					>{/if}</button
 			>
 		{/each}
+		{#if prLink}
+			<a
+				class="inline-flex min-h-10 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-accent sm:min-h-9"
+				href={prLink.href}
+				target={prLink.external ? '_blank' : undefined}
+				rel={prLink.external ? 'noreferrer' : undefined}
+				title="Open the pull request to review it; this answers nothing"
+				data-review-pr
+				><Compass class="size-3.5" aria-hidden="true" />Review{#if prLink.external}<ExternalLink
+						class="size-3.5"
+						aria-hidden="true"
+					/>{/if}</a
+			>
+		{/if}
 		{#if onLater}
 			<button
 				class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:min-h-9"

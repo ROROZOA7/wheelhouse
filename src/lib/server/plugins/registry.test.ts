@@ -1199,3 +1199,47 @@ describe('host routes and address rewrites', () => {
 		expect((await reg.hostRoute('1.localhost'))!.settings).toEqual({ a: 1 });
 	});
 });
+
+describe('project tabs that open a pull request', () => {
+	const reviewer = (id: string, o: Partial<WheelhousePlugin> = {}, query = '?pr={url}') => {
+		const p = simple(id, {});
+		p.contributions[0].opensPullRequest = query;
+		return { ...p, ...o };
+	};
+	const configured = (plugins: PluginConfig['plugins']) => async () => ({
+		config: { plugins },
+		error: null
+	});
+
+	it('refuses one outside a project tab, or with a query that does not name {url} once', () => {
+		const bad = (p: WheelhousePlugin) => checkManifest(p, new Set());
+		expect(bad(reviewer('r'))).toBeNull();
+		const card = simple('r', {}, 'harbour.card');
+		card.contributions[0].opensPullRequest = '?pr={url}';
+		expect(bad(card)).toMatch(/opens a pull request, which only a project.tab can/);
+		for (const q of ['pr={url}', '?pr=1', '?a={url}&b={url}', '?pr={url}#top', '?pr= {url}']) {
+			expect(bad(reviewer('r', {}, q))).toMatch(
+				/is not a query \(starting "\?"\) naming \{url\} once/
+			);
+		}
+	});
+
+	it('names each project’s tab while its plugin is on there, the first plugin winning', async () => {
+		const reg = new PluginRegistry(
+			[simple('plain', {}), reviewer('review'), reviewer('other', {}, '?url={url}')],
+			host({ config: configured({ review: { projects: { beta: false } } }) })
+		);
+		expect(await reg.pullRequestTabs()).toEqual({
+			alpha: '/projects/alpha/review/c?pr={url}',
+			beta: '/projects/beta/other/c?url={url}'
+		});
+	});
+
+	it('names none while no such plugin is on', async () => {
+		const reg = new PluginRegistry(
+			[simple('plain', {}), reviewer('review', { enabledByDefault: false })],
+			host()
+		);
+		expect(await reg.pullRequestTabs()).toEqual({});
+	});
+});

@@ -138,10 +138,10 @@ describe('wheelhouse upgrade', () => {
 
 	it('leaves a busy Wheelhouse running when the captain will not stop its work', async () => {
 		release('0.2.0', 'feat: two');
-		busy = ['a PR review agent on wheelhouse#70'];
+		busy = ['the engine service, still starting'];
 		answers = [true, false];
 		expect(await upgrade(deps())).toBe(true);
-		expect(lines).toContain('  - a PR review agent on wheelhouse#70');
+		expect(lines).toContain('  - the engine service, still starting');
 		expect(lines.join('\n')).toMatch(/Left Wheelhouse at .* running the old version/);
 	});
 });

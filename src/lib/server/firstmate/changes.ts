@@ -3,7 +3,6 @@ import type { PrReviewState } from './approval';
 import type { LedgerStatus, LedgerTask } from './ledger';
 import { answerOf } from '../../inbox';
 import { FEEDBACK_PREFIX } from '../../preview';
-import { changeNoteOf } from '../../prreview';
 import type { BridgeMessage, ChangeRequest, TaskRun, TaskRuns } from '../../types';
 
 /**
@@ -17,8 +16,8 @@ import type { BridgeMessage, ChangeRequest, TaskRun, TaskRuns } from '../../type
  *   latest of them is the ready report everything is measured against.
  * - Changes are requested (a new run, the worker's turn) after that report when the PR
  *   gets unresolved review feedback or new commits on GitHub, when the captain
- *   sends feedback from Wheelhouse (preview feedback, a change asked from the
- *   PR review, a Decisions "Fix"), or when the worker's latest decisive status
+ *   sends feedback from Wheelhouse (preview feedback, a change asked from its
+ *   old PR review, a Decisions "Fix"), or when the worker's latest decisive status
  *   line says it is working again. Plain chat does not.
  * - The next ready report ends that run and hands the PR back to the
  *   captain, whether or not the PR's head moved.
@@ -74,6 +73,22 @@ export function readyTimes(prUrl: string, ledger: LedgerTask | null): number[] {
 const TEXT_MAX = 2000;
 const iso = (ts: number) => new Date(ts * 1000).toISOString();
 
+/**
+ * A change asked from the PR review Wheelhouse used to have, as its note read:
+ * the file and line it names, and what was asked. Wheelhouse no longer writes
+ * these, but the message record keeps the ones it sent, and they still count.
+ */
+function reviewNoteOf(
+	text: string
+): { where: { path: string; line: number } | null; text: string } | null {
+	const m =
+		/^Change requested from the PR review(?: \([^)\n]*\))?(?: at (.+), line (\d+))?:\n([\s\S]*)$/.exec(
+			text
+		);
+	if (!m) return null;
+	return { where: m[1] ? { path: m[1], line: Number(m[2]) } : null, text: m[3].trim() };
+}
+
 /** A change request Wheelhouse sent about the task, read back from the message's text. */
 export function wheelhouseRequest(
 	m: Pick<BridgeMessage, 'text'>
@@ -81,7 +96,7 @@ export function wheelhouseRequest(
 	if (FEEDBACK_PREFIX.test(m.text)) {
 		return { kind: 'preview', text: m.text.replace(FEEDBACK_PREFIX, '').trim(), where: null };
 	}
-	const note = changeNoteOf(m.text);
+	const note = reviewNoteOf(m.text);
 	if (note) return { kind: 'pr-review', text: note.text, where: note.where };
 	const answer = answerOf(m.text);
 	if (answer?.choice === 'fix') {
