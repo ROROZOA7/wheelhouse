@@ -22,7 +22,7 @@ describe('the main sections', () => {
 	it('marks the section the page belongs to', () => {
 		expect(on('/')).toEqual(['Firstmate']);
 		expect(on('/harbour')).toEqual(['Harbour']);
-		expect(on('/tasks/t1/review')).toEqual(['Harbour']);
+		expect(on('/tasks/t1/doc')).toEqual(['Harbour']);
 		expect(on('/projects/lumen')).toEqual(['Harbour']);
 		expect(on('/projects/lumen/passage/edit')).toEqual(['Harbour']);
 		expect(on('/inbox')).toEqual(['Decisions']);

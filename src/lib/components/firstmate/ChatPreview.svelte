@@ -3,6 +3,7 @@
 		CircleCheck,
 		CircleDashed,
 		CircleX,
+		Compass,
 		ExternalLink,
 		GitMerge,
 		GitPullRequest,
@@ -11,6 +12,7 @@
 	} from '@lucide/svelte';
 	import type { ChatPreview } from '$lib/chat/previews';
 	import { ago } from '$lib/format';
+	import { pullRequests } from '$lib/client/pullrequests.svelte';
 	import LivePreview from '$lib/components/wh/LivePreview.svelte';
 	import PreviewStudio from '$lib/components/wh/PreviewStudio.svelte';
 
@@ -30,6 +32,8 @@
 
 	const task = $derived(preview.task);
 	const url = $derived(task.preview?.url ?? null);
+	// Review opens the PR in a plugin's review tab while one is on for the project, else on GitHub.
+	const prLink = $derived(task.pr ? pullRequests.review(task.projectId, task.pr) : null);
 	let full = $state(false);
 
 	const CHECKS = {
@@ -106,6 +110,14 @@
 			>
 		{/if}
 		<span class="ml-auto flex items-center gap-1">
+			<!-- Only a plugin's review tab: the pull request on GitHub is linked beside it already. -->
+			{#if prLink && !prLink.external}
+				<a
+					href={prLink.href}
+					class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-accent"
+					data-review-pr><Compass class="size-3.5" aria-hidden="true" />Review</a
+				>
+			{/if}
 			<button
 				type="button"
 				class="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-accent"

@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstmateChat } from '$lib/client/chat.svelte';
 import { inbox } from '$lib/client/inbox.svelte';
+import { pullRequests } from '$lib/client/pullrequests.svelte';
 import { discussText } from '$lib/chat/discuss';
 import { optionsFor, type AnsweredDecision, type InboxCard, type InboxView } from '$lib/inbox';
 import { taskSummary } from '../../../../tests/helpers/task-summary';
@@ -139,6 +140,7 @@ afterEach(() => {
 	firstmateChat.session = null;
 	inbox.value = null;
 	inbox.pending = {};
+	pullRequests.tabs = {};
 	vi.unstubAllGlobals();
 });
 
@@ -266,6 +268,39 @@ describe('decisions in the chat', () => {
 		expect(discuss.title).toMatch(/cannot be asked about it here/);
 	});
 
+	it('opens a merge call’s pull request in the review tool, beside Approve, Fix and Skip', () => {
+		const pr = 'https://github.com/demo/lumen/pull/212';
+		const merge: InboxCard = {
+			...PRICING,
+			id: 'lumen-pricing:merge-pr',
+			kind: 'merge',
+			key: 'merge-pr',
+			question: 'Merge pull request #212? Its checks are green.',
+			evidence: { ...PRICING.evidence, pr: { url: pr, number: 212 }, checks: 'green' },
+			options: optionsFor('merge')
+		};
+		state.page.data = { inbox: view([merge]), sessionToken: 't' };
+		pullRequests.tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
+		start(BASE);
+		const answers = decision('lumen-pricing:merge-pr').querySelector('[role="group"]')!;
+		const review = answers.querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
+		expect(review.textContent?.trim()).toBe('Review');
+		expect(review.getAttribute('href')).toBe(
+			`/projects/lumen/pr-review/review?pr=${encodeURIComponent(pr)}`
+		);
+		expect(review.target).toBe('');
+		for (const b of ['Approve', 'Fix', 'Skip']) expect(button(answers, b)).toBeTruthy();
+
+		// With no review plugin on for the project, Review is the pull request on GitHub.
+		unmount(app);
+		pullRequests.tabs = {};
+		start(BASE);
+		const plain =
+			decision('lumen-pricing:merge-pr').querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
+		expect(plain.getAttribute('href')).toBe(pr);
+		expect(plain.target).toBe('_blank');
+	});
+
 	it('shows no decisions while the inbox is not available', () => {
 		state.page.data = { inbox: { ...view(), available: false } };
 		start(BASE);
@@ -299,5 +334,32 @@ describe('live previews in the chat', () => {
 		expect(fetchMock.mock.calls.some(([u]) => u === '/api/tasks/lumen-share-links/preview')).toBe(
 			true
 		);
+	});
+
+	it('offers Review in the review tool while a plugin is on for the project, else only the PR link', () => {
+		const pr = 'https://github.com/demo/lumen/pull/212';
+		const task = taskSummary('lumen-share-links', 'landed', {
+			pr: { url: pr, number: 212 },
+			preview: { url: 'http://127.0.0.1:5240/', reportedAt: at('09') },
+			pipeline: null
+		});
+		const records = [
+			firstmate('a1', '10', 'Landed lumen-share-links.'),
+			done('d1', '10'),
+			captain('u2', '20', 'Thanks.')
+		];
+		state.page.data = { inbox: view([]) };
+		pullRequests.tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
+		start(records, { tasks: [task], projects: [{ id: 'lumen', name: 'Lumen' }] });
+		const card = () => document.querySelector<HTMLElement>('[data-chat-preview]')!;
+		expect(card().querySelector('a[data-review-pr]')?.getAttribute('href')).toBe(
+			`/projects/lumen/pr-review/review?pr=${encodeURIComponent(pr)}`
+		);
+
+		unmount(app);
+		pullRequests.tabs = {};
+		start(records, { tasks: [task], projects: [{ id: 'lumen', name: 'Lumen' }] });
+		expect(card().querySelector('a[data-review-pr]')).toBeNull();
+		expect(card().querySelector(`a[href="${pr}"]`)?.textContent).toMatch(/Pull request #212/);
 	});
 });

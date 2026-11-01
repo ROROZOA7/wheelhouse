@@ -5,6 +5,7 @@
 	import { awaitingReview, reviewView } from '$lib/review';
 	import { Compass, ExternalLink, Images, MessagesSquare, MonitorPlay } from '@lucide/svelte';
 	import { hintLine } from '$lib/buildlog';
+	import { pullRequests } from '$lib/client/pullrequests.svelte';
 	import CardPreview from './CardPreview.svelte';
 	import ShotStrip from './ShotStrip.svelte';
 	import StageTrack from './StageTrack.svelte';
@@ -15,12 +16,28 @@
 	const href = $derived(`/tasks/${encodeURIComponent(task.id)}`);
 	const review = $derived(awaitingReview(task));
 	const rv = $derived(reviewView(task));
+	// The project's plugin review tab while one is on, else the PR on GitHub.
+	const prLink = $derived(rv.pr ? pullRequests.review(task.projectId, rv.pr) : null);
 	const who = $derived(agentLine(task.worker));
 	// Questions asked about the task and the docs its session referenced, in a few words.
 	const hint = $derived(hintLine(task.build));
 	// A variable, not a literal: Svelte trims the spaces of a bare " · " inside a block.
 	const sep = ' · ';
 </script>
+
+{#snippet reviewPr(variant: 'default' | 'outline')}
+	{#if prLink}
+		<Button
+			class={variant === 'default' ? 'flex-1' : ''}
+			{variant}
+			href={prLink.href}
+			target={prLink.external ? '_blank' : undefined}
+			rel={prLink.external ? 'noreferrer' : undefined}
+			data-review-pr
+			><Compass />Review PR{#if prLink.external}<ExternalLink />{/if}</Button
+		>
+	{/if}
+{/snippet}
 
 <!-- One card per thing that needs the captain, with one primary action. -->
 <article class="flex min-w-0 flex-col rounded-lg border border-t-2 border-t-sea bg-card p-3">
@@ -79,20 +96,21 @@
 		{#if task.preview}<CardPreview {task} />{/if}
 		<div class="mt-4"><StageTrack {task} /></div>
 		<div class="mt-5 flex flex-wrap gap-2">
-			<!-- Review PR opens the PR with the review agent's guide; GitHub stays one click away. -->
+			<!-- Review PR opens the PR in a plugin's review tab while one is on (GitHub stays one click away), else on GitHub. -->
 			{#if review && rv.preview}
 				<Button class="flex-1" href={rv.preview.url} target="_blank" rel="noreferrer"
 					>Open preview<ExternalLink /></Button
 				>
-				{#if rv.pr}
-					<Button variant="outline" href="{href}/review" data-review-pr><Compass />Review PR</Button
+				{#if prLink}
+					{@render reviewPr('outline')}
+				{/if}
+			{:else if review && rv.pr && prLink}
+				{@render reviewPr('default')}
+				{#if !prLink.external}
+					<Button variant="outline" href={rv.pr.url} target="_blank" rel="noreferrer"
+						>On GitHub<ExternalLink /></Button
 					>
 				{/if}
-			{:else if review && rv.pr}
-				<Button class="flex-1" href="{href}/review" data-review-pr><Compass />Review PR</Button>
-				<Button variant="outline" href={rv.pr.url} target="_blank" rel="noreferrer"
-					>On GitHub<ExternalLink /></Button
-				>
 			{:else if review}
 				<Button class="flex-1" {href}>Review the work</Button>
 			{:else}

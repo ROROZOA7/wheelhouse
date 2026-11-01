@@ -2,11 +2,13 @@
 	import type { TaskSummary } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import { reviewView, type ReviewShot } from '$lib/review';
+	import { pullRequests } from '$lib/client/pullrequests.svelte';
 	import { Compass, ExternalLink, ImageOff } from '@lucide/svelte';
 	import Lightbox from './Lightbox.svelte';
 
 	let { task, shots }: { task: TaskSummary; shots: ReviewShot[] } = $props();
 	const rv = $derived(reviewView(task, shots));
+	const prLink = $derived(rv.pr ? pullRequests.review(task.projectId, rv.pr) : null);
 
 	let enlarged = $state<number | null>(null);
 </script>
@@ -70,16 +72,22 @@
 		{:else}
 			<span class="text-sm text-muted-foreground" data-review="preview">{rv.previewText}</span>
 		{/if}
-		{#if rv.pr}
+		{#if rv.pr && prLink}
+			<!-- A plugin's review tab while one is on for the project, else the PR on GitHub. -->
 			<Button
 				variant={rv.preview ? 'outline' : 'default'}
-				href={rv.pr.url}
-				target="_blank"
-				rel="noreferrer">Review {rv.pr.label}<ExternalLink /></Button
+				href={prLink.href}
+				target={prLink.external ? '_blank' : undefined}
+				rel={prLink.external ? 'noreferrer' : undefined}
+				data-review-pr
+				>{#if !prLink.external}<Compass />{/if}Review {rv.pr
+					.label}{#if prLink.external}<ExternalLink />{/if}</Button
 			>
-			<Button variant="outline" href="/tasks/{encodeURIComponent(task.id)}/review"
-				><Compass />Guided review</Button
-			>
+			{#if !prLink.external}
+				<Button variant="outline" href={rv.pr.url} target="_blank" rel="noreferrer"
+					>On GitHub<ExternalLink /></Button
+				>
+			{/if}
 		{:else}
 			<span class="text-sm text-muted-foreground" data-review="pr">{rv.prText}</span>
 		{/if}

@@ -3,7 +3,8 @@ import {
 	currentHealth,
 	currentHeadroom,
 	currentInbox,
-	currentAddressRewrites
+	currentAddressRewrites,
+	currentPullRequestTabs
 } from '$lib/server/runtime';
 import { sessionToken } from '$lib/server/session';
 import type { LayoutServerLoad } from './$types';
@@ -17,6 +18,8 @@ export const load: LayoutServerLoad = async () => ({
 	inbox: await currentInbox(),
 	// Where addresses on this computer open instead, while a plugin's address rewrite is on.
 	addressRewrites: await currentAddressRewrites(),
+	// Where each project's pull requests open for review: a plugin's tab while one is on, else GitHub.
+	pullRequestTabs: await currentPullRequestTabs(),
 	// Issued only to pages Wheelhouse serves; mutating requests must echo it.
 	sessionToken: sessionToken()
 });

@@ -6,6 +6,8 @@
 	import { live } from '$lib/client/live.svelte';
 	import { inbox } from '$lib/client/inbox.svelte';
 	import { addressRewrites, rewriteLinks } from '$lib/client/addresses.svelte';
+	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import type { PullRequestTabs } from '$lib/plugins/pullrequests';
 	import { slots } from '$lib/client/slots.svelte';
 	import { navPageHref, slotKey, type SlotKey } from '$lib/plugins/keys';
 	import type { SlotView } from '$lib/plugins/types';
@@ -55,6 +57,10 @@
 	// Addresses on Wheelhouse's computer open where a plugin's address rewrite says, while it is on.
 	$effect(() => {
 		addressRewrites.to = (page.data.addressRewrites as string[] | undefined)?.[0] ?? null;
+	});
+	// Review links on a pull request open a plugin's review tab for its project, while one is on.
+	$effect(() => {
+		pullRequests.tabs = (page.data.pullRequestTabs as PullRequestTabs | undefined) ?? {};
 	});
 	$effect(() => {
 		void live.revision;

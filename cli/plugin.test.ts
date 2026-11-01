@@ -311,7 +311,7 @@ describe('restarting Wheelhouse after a change', () => {
 		const url = 'http://127.0.0.1:4310/';
 		busyAt = {
 			url,
-			busy: ['a PR review agent on t-1', 'the docket-viewer service, still starting']
+			busy: ['the engine service, still starting', 'the docket-viewer service, still starting']
 		};
 		lines = [];
 		asked = [];
@@ -322,7 +322,7 @@ describe('restarting Wheelhouse after a change', () => {
 		expect(lines).toEqual([
 			'project-links is off.',
 			`Restarting Wheelhouse at ${url} stops what it is running:`,
-			'  - a PR review agent on t-1',
+			'  - the engine service, still starting',
 			'  - the docket-viewer service, still starting',
 			`Left Wheelhouse at ${url} running; restart it to unload project-links.`
 		]);
@@ -336,7 +336,7 @@ describe('restarting Wheelhouse after a change', () => {
 	it('restarts mid-work with --yes, still saying what it stops', async () => {
 		await cli('install', 'acme/links', '--yes');
 		const url = 'http://127.0.0.1:4310/';
-		busyAt = { url, busy: ['a PR review agent on t-1'] };
+		busyAt = { url, busy: ['the engine service, still starting'] };
 		lines = [];
 		asked = [];
 		await cli('remove', 'project-links', '--yes');
@@ -344,7 +344,7 @@ describe('restarting Wheelhouse after a change', () => {
 		expect(lines).toEqual([
 			'Removed project-links.',
 			`Restarting Wheelhouse at ${url} stops what it is running:`,
-			'  - a PR review agent on t-1',
+			'  - the engine service, still starting',
 			`Restarting Wheelhouse at ${url} to unload project-links.`
 		]);
 	});

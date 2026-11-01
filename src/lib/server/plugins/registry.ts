@@ -3,6 +3,8 @@ import { realpath, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { matchHost, validHostTemplate } from '../../plugins/addresses';
 import { normalizeBlocks, normalizeCards } from '../../plugins/blocks';
+import { projectTabHref, type SlotQuery } from '../../plugins/keys';
+import { validPullRequestQuery, type PullRequestTabs } from '../../plugins/pullrequests';
 import {
 	SLOT_SCOPE,
 	SLOTS,
@@ -13,7 +15,6 @@ import {
 	type SlotEntry,
 	type SlotView
 } from '../../plugins/types';
-import type { SlotQuery } from '../../plugins/keys';
 import type { Available, Project, TaskSummary } from '../../types';
 import { runBounded } from '../firstmate/exec';
 import { EMPTY_CONFIG, isEnabled, type PluginConfig } from './config';
@@ -167,6 +168,14 @@ export function checkManifest(p: WheelhousePlugin, taken: ReadonlySet<string>): 
 		}
 		if (c.slot === 'header.indicator' && ('blocks' in c.render || 'app' in c.render)) {
 			return `contribution "${c.id}": header indicators render through a panel or an element only.`;
+		}
+		if (c.opensPullRequest !== undefined) {
+			if (c.slot !== 'project.tab') {
+				return `contribution "${c.id}" opens a pull request, which only a project.tab can.`;
+			}
+			if (!validPullRequestQuery(c.opensPullRequest)) {
+				return `contribution "${c.id}" opens a pull request at "${String(c.opensPullRequest)}", which is not a query (starting "?") naming {url} once.`;
+			}
 		}
 		if ('element' in c.render && !elementTag(p.id, c.render.element)) {
 			return `contribution "${c.id}": its element "${c.render.element}" must be a custom element tag starting "${p.id}-".`;
@@ -587,6 +596,27 @@ export class PluginRegistry {
 		return this.loaded
 			.filter((p) => p.addressRewrites?.length && this.onAnywhere(config, p))
 			.flatMap((p) => p.addressRewrites!.map((r) => r.to));
+	}
+
+	/**
+	 * Per project, the address of the project tab that opens one of its pull
+	 * requests, `{url}` still in it: the first plugin that is on there with a
+	 * project.tab that says it opens one. Projects with none are left out.
+	 */
+	async pullRequestTabs(): Promise<PullRequestTabs> {
+		const { config } = await this.config();
+		const out: PullRequestTabs = {};
+		for (const project of this.host.fleet().projects) {
+			for (const plugin of this.loaded) {
+				const c = plugin.contributions.find((x) => x.slot === 'project.tab' && x.opensPullRequest);
+				if (!c || !this.enabled(config, plugin, project)) continue;
+				out[project.id] =
+					projectTabHref(project.id, { pluginId: plugin.id, contributionId: c.id }) +
+					c.opensPullRequest;
+				break;
+			}
+		}
+		return out;
 	}
 
 	/**

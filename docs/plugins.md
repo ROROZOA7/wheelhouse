@@ -191,6 +191,25 @@ A route that throws answers 500, and Wheelhouse logs which plugin it was. A host
 
 [`tests/fixtures/host-route-demo/`](../tests/fixtures/host-route-demo/) is a complete example in the installed-plugin format: an address rewrite, and a host route that answers with what it was asked and echoes WebSocket messages. Wheelhouse's tests load it.
 
+## Pull request review tabs
+
+Wheelhouse has no PR review of its own: a plugin's project tab can review pull requests, and every **Review** link on one opens that tab. A `project.tab` contribution says it opens one pull request with `opensPullRequest`, the query its address takes, `{url}` standing for the pull request's address:
+
+```js
+contributions: [
+	{
+		slot: 'project.tab',
+		id: 'review',
+		title: 'PR review',
+		provider: 'prs',
+		render: { element: 'pr-review-tab' },
+		opensPullRequest: '?pr={url}'
+	}
+];
+```
+
+While the plugin is on for a project, **Review the pull request** on its task pages, **Review PR** on its task cards, and **Review** on its merge calls' decision cards (in the Decisions page, On deck and the chat) and its live preview cards in the chat open `/projects/<project>/<plugin>/<tab>?pr=<the PR's address, URL-encoded>`; the tab reads the query and shows that pull request. With no such plugin on for the project, the link is the pull request on GitHub. When more than one is on, the first loaded wins (compiled-in, then bundled, then installed). The query must start with `?`, name `{url}` once and have no `#` or spaces; Wheelhouse refuses a plugin whose query does not, or that puts it on any other slot. It is not in the manifest: a Wheelhouse that does not know it ignores it.
+
 ## Installed plugins
 
 An installed plugin lives in a repository of its own, laid out like a Claude Code plugin: a manifest in a dot-folder at the root, and its code in conventional folders.
@@ -306,7 +325,7 @@ wheelhouse plugin remove project-links
 
 **Restarting to load a change.** Wheelhouse loads plugins once, when it starts, so `install`, `update`, `remove`, `enable` and `disable` each restart every Wheelhouse running from the same plugins directory once they have made their change, and say so (`Restarting Wheelhouse at http://127.0.0.1:4310/ to load project-links.`); with none running, they say the change loads at the next start. `wheelhouse open` runs the server under a small supervisor that starts it again with the same options on the port it first listened on (so `--port 0` keeps its address), without opening another browser tab; pages reconnect by themselves, and Firstmate's session and its crew keep running, since they belong to tmux, not to Wheelhouse.
 
-A restart does stop what that Wheelhouse itself is running: PR review agents still answering, plugin services it is still starting (one already started keeps running), the script runs and Firstmate chat it has in flight, and every open terminal drawer, which reconnects. So when a running Wheelhouse has a PR review agent or a service launch in progress, the command lists them and asks before restarting it (the Plugins page lists them in its review); if you say no, it leaves that Wheelhouse running and tells you to restart it to load the change. `--yes` restarts it without asking, still listing what it stops.
+A restart does stop what that Wheelhouse itself is running: plugin services it is still starting (one already started keeps running), the script runs and Firstmate chat it has in flight, and every open terminal drawer, which reconnects. So when a running Wheelhouse has a service launch in progress, the command lists them and asks before restarting it (the Plugins page lists them in its review); if you say no, it leaves that Wheelhouse running and tells you to restart it to load the change. `--yes` restarts it without asking, still listing what it stops.
 
 #### From the Plugins page
 

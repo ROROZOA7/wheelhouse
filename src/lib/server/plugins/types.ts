@@ -247,6 +247,13 @@ export interface Contribution {
 	 */
 	placement?: { order?: number; step?: string };
 	/**
+	 * A project.tab only: the tab opens one of the project's pull requests, at
+	 * its address plus this query, with `{url}` for the PR's address (such as
+	 * `?pr={url}`). While the plugin is on for a project, Review links on its
+	 * pull requests open the tab there (see lib/plugins/pullrequests.ts).
+	 */
+	opensPullRequest?: string;
+	/**
 	 * `blocks`: the provider returns Block[] (BridgeCard[] for bridge.card).
 	 * `component`: a key in the panel registry (`src/lib/plugins/panels.ts`),
 	 * given the provider's value as `data`. bridge.card renders blocks only.

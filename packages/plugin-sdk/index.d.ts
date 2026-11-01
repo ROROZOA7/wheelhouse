@@ -143,6 +143,8 @@ export interface Contribution {
 	provider: string;
 	when?: 'always' | 'provider-available';
 	placement?: { order?: number; step?: string };
+	/** A project.tab that opens one pull request: the query its address takes, `{url}` for the PR's (`?pr={url}`). */
+	opensPullRequest?: string;
 	render: Render;
 	badge?(value: unknown): number | null;
 }

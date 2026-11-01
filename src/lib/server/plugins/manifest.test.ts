@@ -303,6 +303,13 @@ describe('a server entry checked against its manifest', () => {
 		expect(r.ok && r.plugin.enabledByDefault).toBeUndefined();
 	});
 
+	it('keeps a project tab’s pull request query from the export (the registry checks it)', () => {
+		const x = exported();
+		Object.assign(x.contributions[0], { opensPullRequest: '?pr={url}' });
+		const r = fromExport(manifest(), { default: x });
+		expect(r.ok && r.plugin.contributions[0].opensPullRequest).toBe('?pr={url}');
+	});
+
 	it('refuses an export that disagrees with the manifest', () => {
 		const err = (x: unknown, m = manifest()) => {
 			const r = fromExport(m, { default: x });

@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { Duplex } from 'node:stream';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Command, InvalidArgumentError, Option } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { version } from '../package.json';
 import { UPLOAD_MAX_BYTES } from '../src/lib/chat/attachments';
 import { checkCompatibility, resolveInstall } from '../src/lib/server/firstmate/install';
@@ -94,8 +94,6 @@ interface OpenOptions {
 	configDir?: string;
 	pluginsDir?: string;
 	skipPermissions: boolean;
-	reviewModel?: string;
-	reviewEffort?: string;
 }
 
 async function open(opts: OpenOptions): Promise<void> {
@@ -160,8 +158,6 @@ async function open(opts: OpenOptions): Promise<void> {
 	process.env.WHEELHOUSE_INSTALL_DIR = path.resolve(path.dirname(file), '..');
 	if (opts.tmuxSocket) process.env.WHEELHOUSE_TMUX_SOCKET = opts.tmuxSocket;
 	process.env.WHEELHOUSE_SKIP_PERMISSIONS = opts.skipPermissions ? '1' : '0';
-	if (opts.reviewModel) process.env.WHEELHOUSE_REVIEW_MODEL = opts.reviewModel;
-	if (opts.reviewEffort) process.env.WHEELHOUSE_REVIEW_EFFORT = opts.reviewEffort;
 
 	const cli = fileURLToPath(import.meta.url);
 	const watcher = supervise({
@@ -300,16 +296,6 @@ export function program(): Command {
 		.option(
 			'--no-skip-permissions',
 			'start Firstmate without --dangerously-skip-permissions, so Claude Code asks before tools run (answer in the terminal drawer)'
-		)
-		.option(
-			'--review-model <model>',
-			'the model the PR review agent uses (default: $WHEELHOUSE_REVIEW_MODEL, else sonnet)'
-		)
-		.addOption(
-			new Option(
-				'--review-effort <level>',
-				'how hard the PR review agent thinks (default: $WHEELHOUSE_REVIEW_EFFORT, else low)'
-			).choices(['low', 'medium', 'high', 'xhigh', 'max'])
 		)
 		.action((opts: OpenOptions) => open(opts));
 	cli

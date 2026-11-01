@@ -42,6 +42,7 @@
 	import { CONFIDENCE, duration, etaLine, PHASE_LABEL } from '$lib/insights';
 	import { tone, textClass } from '$lib/components/wh/tone';
 	import { awaitingReview } from '$lib/review';
+	import { pullRequests } from '$lib/client/pullrequests.svelte';
 	import {
 		DEFAULT_TAB,
 		hasDetail,
@@ -92,6 +93,8 @@
 	const detail = $derived(fetched?.task.id === id ? fetched : data.detail);
 	// Prefer the live summary from the fleet stream; evidence refreshes separately.
 	const task = $derived(currentFleet()?.tasks.find((t) => t.id === id) ?? detail?.task ?? null);
+	// The project's plugin review tab while one is on, else the PR on GitHub.
+	const prLink = $derived(task?.pr ? pullRequests.review(task.projectId, task.pr) : null);
 	const ev = $derived(detail?.evidence ?? null);
 	const project = $derived(currentFleet()?.projects.find((p) => p.id === task?.projectId));
 	const shots = $derived(ev?.screenshots.available ? ev.screenshots.value : []);
@@ -448,12 +451,15 @@
 	{/if}
 {/snippet}
 
-{#snippet guidedReview()}
-	<a
-		href="/tasks/{encodeURIComponent(id)}/review"
-		class="mt-2 inline-flex items-center gap-1.5 text-sm text-sea hover:underline"
-		><Compass class="size-3.5" aria-hidden="true" />Review it with the review agent’s guide</a
-	>
+{#snippet reviewTab()}
+	<!-- Only a plugin's review tab: the pull request on GitHub is linked just above. -->
+	{#if prLink && !prLink.external}
+		<a
+			href={prLink.href}
+			class="mt-2 inline-flex items-center gap-1.5 text-sm text-sea hover:underline"
+			data-review-pr><Compass class="size-3.5" aria-hidden="true" />Review the pull request</a
+		>
+	{/if}
 {/snippet}
 
 {#snippet prBlock()}
@@ -488,7 +494,7 @@
 			<p class="mt-2 text-sm text-muted-foreground">No CI checks reported.</p>
 		{/if}
 		{@render source(ev.pr)}
-		{@render guidedReview()}
+		{@render reviewTab()}
 	{:else if ev && !ev.pr.available && task?.pr}
 		<a
 			href={task.pr.url}
@@ -749,10 +755,15 @@
 				>{task.passage.link.label}<ExternalLink /></Button
 			>
 		{/if}
-		{#if task.pr}
-			<!-- The diff with the review agent's guide on top, and questions about it. -->
-			<Button variant="outline" href="/tasks/{encodeURIComponent(task.id)}/review"
-				><Compass />Review the pull request</Button
+		{#if prLink}
+			<!-- A plugin's review tab while one is on for the project, else the PR on GitHub. -->
+			<Button
+				variant="outline"
+				href={prLink.href}
+				target={prLink.external ? '_blank' : undefined}
+				rel={prLink.external ? 'noreferrer' : undefined}
+				data-review-pr
+				><Compass />Review the pull request{#if prLink.external}<ExternalLink />{/if}</Button
 			>
 		{/if}
 		<!-- Opens the chat with this task already mentioned in the message box. -->

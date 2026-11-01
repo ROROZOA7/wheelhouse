@@ -272,7 +272,7 @@ export interface TaskSummary {
 /**
  * One change the captain asked for on a task's pull request.
  *   github      a review, a review thread (with its file and line) or a PR comment
- *   wheelhouse  preview feedback, a change asked from the PR review, or a Decisions "Fix"
+ *   wheelhouse  preview feedback, a change asked from the old PR review, or a Decisions "Fix"
  */
 export interface ChangeRequest {
 	id: string;
