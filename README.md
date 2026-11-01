@@ -1,4 +1,4 @@
-<img width="1774" height="887" alt="image" src="https://github.com/user-attachments/assets/7448e391-c189-4861-ad45-3cb51ceca553" />
+<img width="1774" height="887" alt="Wheelhouse: your bridge to Firstmate and the whole crew" src="https://github.com/user-attachments/assets/7448e391-c189-4861-ad45-3cb51ceca553" />
 
 # Wheelhouse
 
@@ -31,68 +31,75 @@ Wheelhouse opens in your browser at the local URL it prints.
 
 Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/development.md))? The arrow-up icon in its header says when GitHub has a newer version and upgrades and restarts it on a click, as `wheelhouse upgrade` does in a terminal. Installed from npm, update with `npm install -g @chrisjowen/wheelhouse`.
 
-![Wheelhouse: the main sections in the menu down the left; On deck beside it with the work under way; and the conversation with Firstmate on the right, with a question asked as buttons](docs/screenshots/home.webp)
+![Wheelhouse: the main sections in the menu down the left; On deck beside it with the work under way; and the conversation with Firstmate on the right, with open decisions as cards in the chat](docs/screenshots/home.png)
 
 <sub>Screenshots show a demo crew working on made-up projects.</sub>
 
 ## ✨ What you get
 
-- 💬 **Talk to Firstmate like a teammate.** Chat, answer with buttons, mention tasks with `#`, run commands with `/`, or just dictate.
+- 💬 **Talk to Firstmate like a teammate.** Chat, answer with buttons, mention tasks with `#`, run commands with `/`, or just dictate. A live preview shows as a card under the reply about it, and every open decision as a card you can answer in place.
+
+  ![The Firstmate chat: a reply that a pull request is ready, with its live preview as a card underneath, showing the app and links to the pull request and a full-size view](docs/screenshots/chat-preview.png)
+
+  ![Decisions in the Firstmate chat: a review question and a choice between two designs, each a card with Approve, Fix, Skip and Discuss](docs/screenshots/chat-decision.png)
+
 - 🗺️ **Harbour.** Every project at a glance: what needs you, what is moving and what landed. Open one for its work, each task with a live console.
 
-  ![Harbour: a card per project, the one that needs you first, each with what waits on you, the work under way and its step, and what landed this week](docs/screenshots/harbour.webp)
+  ![Harbour: a card per project, the one that needs you first, each with what waits on you, the work under way and its step, and what landed this week](docs/screenshots/harbour.png)
+
+  ![A project page: lumen's banner with what needs you, a row of tabs for its work, issues, links, secrets and passage, and the tasks waiting on your move](docs/screenshots/project.png)
 
 - 📡 **Radar.** Watch the whole fleet flow from Queued to Landed, live.
 
-  ![Fleet radar: every task as a dot moving from Queued through Building, Testing and Pull request to Landed](docs/screenshots/radar.webp)
+  ![Fleet radar: every task as a dot moving from Queued through Building, Testing and Pull request to Landed](docs/screenshots/radar.png)
 
 - 🔔 **The ship's bell.** Rings for green PRs, questions, stuck workers and landed merges.
 
-  ![The ship's bell: a question waiting and a pull request gone green, each with a one-click answer](docs/screenshots/bell.webp)
+  ![The ship's bell: a question waiting and a pull request gone green, each with a one-click answer](docs/screenshots/bell.png)
 
 - 📱 **From your phone.** Message Firstmate from Discord; its answers, alerts and decisions come back with buttons.
 
 - ✅ **Decisions.** Every open question in one stack, answered in one tap.
 
-  ![Decisions: every open question as a card, with Approve, Fix, Skip and Ask me later, and keyboard shortcuts](docs/screenshots/inbox.webp)
+  ![Decisions: every open question as a card, with Approve, Fix, Skip and Ask me later, and keyboard shortcuts](docs/screenshots/inbox.png)
 
 - 🧭 **Task pages.** Every check, file, PR and log for a task in one place.
 
-  ![A task page: the automated checks step by step, with two failing tests and the start of their output](docs/screenshots/task.webp)
+  ![A task page: the automated checks step by step, with two failing tests and the start of their output](docs/screenshots/task.png)
 
 - 📜 **The conversation.** Every question a worker asked and how it was answered.
 
-  ![The conversation between a worker and Firstmate: an instruction the worker has read, and the automated review's two questions with Firstmate's call on each](docs/screenshots/conversation.webp)
+  ![The conversation between a worker and Firstmate: an instruction the worker has read, and the automated review's question with Firstmate's call on it](docs/screenshots/conversation.png)
 
 - 🛠️ **Passage editor.** Add your own steps, like a local deploy after merge.
 
-  ![The passage editor testing a new Deployed locally step on a landed task: where the task would be, and the local deploy's output](docs/screenshots/passage-editor.webp)
+  ![The passage editor testing a new Deployed locally step on a landed task: where the task would be, and the local deploy's output](docs/screenshots/passage-editor.png)
 
 - 🔍 **Guided PR review.** The important changes first, with why each was made.
 
-  ![Pull request review: the review guide's summary, the changes to read first with why each was made, and a box to ask the review agent](docs/screenshots/review.webp)
+  ![Pull request review: the review guide's summary, the changes to read first with why each was made, and a box to ask the review agent](docs/screenshots/review.png)
 
 - 🖥️ **Live preview.** Click around the real app and send feedback to the worker.
 
-  ![A live preview of the app under review, with feedback sent to the worker and Firstmate's reply beside it](docs/screenshots/preview.webp)
+  ![A live preview of the app under review, with feedback sent to the worker and Firstmate's reply beside it](docs/screenshots/preview.png)
 
 - 🤝 **Decided for you.** Every call Firstmate made on your behalf, with its reason.
 
-  ![Decided for you: review questions Firstmate answered on your behalf, grouped by day, with each call and its reason](docs/screenshots/decisions.webp)
+  ![Decided for you: review questions Firstmate answered on your behalf, grouped by day, with each call and its reason](docs/screenshots/decisions.png)
 
 - ⏱️ **Where time went & Headroom.** Spot the bottleneck and never run out of allowance.
 
-  ![Where time went: each task's time split into building, review, CI and waiting on you](docs/screenshots/time.webp)
+  ![Where time went: each task's time split into building, review, CI and waiting on you](docs/screenshots/time.png)
 
-  ![Headroom: Claude allowance left this session and this week, and each task's share of recent use](docs/screenshots/headroom.webp)
+  ![Headroom: Claude allowance left this session and this week, and each task's share of recent use](docs/screenshots/headroom.png)
 
 - 📈 **Improvements.** Your harness gets better, only with your approval.
 
-  ![Improvements: a harness review is due, proposals waiting for your call and the size of the harness](docs/screenshots/improvements.webp)
+  ![Improvements: a harness review is due, proposals waiting for your call and the size of the harness](docs/screenshots/improvements.png)
 
 - 🌙 **Day or night.** A calm logbook look in light, deep navy after dark.
 
-  ![Wheelhouse in dark mode: the same home page on deep navy](docs/screenshots/home-dark.webp)
+  ![Wheelhouse in dark mode: the same home page on deep navy](docs/screenshots/home-dark.png)
 
 ## 🔒 Yours, and only yours
 
