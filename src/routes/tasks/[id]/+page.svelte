@@ -42,7 +42,7 @@
 	import { CONFIDENCE, duration, etaLine, PHASE_LABEL } from '$lib/insights';
 	import { tone, textClass } from '$lib/components/wh/tone';
 	import { awaitingReview } from '$lib/review';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import {
 		DEFAULT_TAB,
 		hasDetail,

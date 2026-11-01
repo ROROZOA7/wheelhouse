@@ -2,7 +2,7 @@
 	import type { TaskSummary } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import { reviewView, type ReviewShot } from '$lib/review';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import { Compass, ExternalLink, ImageOff } from '@lucide/svelte';
 	import Lightbox from './Lightbox.svelte';
 

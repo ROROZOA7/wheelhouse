@@ -2,7 +2,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstmateChat } from '$lib/client/chat.svelte';
 import { inbox } from '$lib/client/inbox.svelte';
-import { pullRequests } from '$lib/client/pullrequests.svelte';
 import { discussText } from '$lib/chat/discuss';
 import { optionsFor, type AnsweredDecision, type InboxCard, type InboxView } from '$lib/inbox';
 import { taskSummary } from '../../../../tests/helpers/task-summary';
@@ -140,7 +139,6 @@ afterEach(() => {
 	firstmateChat.session = null;
 	inbox.value = null;
 	inbox.pending = {};
-	pullRequests.tabs = {};
 	vi.unstubAllGlobals();
 });
 
@@ -279,8 +277,8 @@ describe('decisions in the chat', () => {
 			evidence: { ...PRICING.evidence, pr: { url: pr, number: 212 }, checks: 'green' },
 			options: optionsFor('merge')
 		};
-		state.page.data = { inbox: view([merge]), sessionToken: 't' };
-		pullRequests.tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
+		const tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
+		state.page.data = { inbox: view([merge]), sessionToken: 't', pullRequestTabs: tabs };
 		start(BASE);
 		const answers = decision('lumen-pricing:merge-pr').querySelector('[role="group"]')!;
 		const review = answers.querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
@@ -293,7 +291,7 @@ describe('decisions in the chat', () => {
 
 		// With no review plugin on for the project, Review is the pull request on GitHub.
 		unmount(app);
-		pullRequests.tabs = {};
+		state.page.data = { inbox: view([merge]), sessionToken: 't' };
 		start(BASE);
 		const plain =
 			decision('lumen-pricing:merge-pr').querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
@@ -348,8 +346,10 @@ describe('live previews in the chat', () => {
 			done('d1', '10'),
 			captain('u2', '20', 'Thanks.')
 		];
-		state.page.data = { inbox: view([]) };
-		pullRequests.tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
+		state.page.data = {
+			inbox: view([]),
+			pullRequestTabs: { lumen: '/projects/lumen/pr-review/review?pr={url}' }
+		};
 		start(records, { tasks: [task], projects: [{ id: 'lumen', name: 'Lumen' }] });
 		const card = () => document.querySelector<HTMLElement>('[data-chat-preview]')!;
 		expect(card().querySelector('a[data-review-pr]')?.getAttribute('href')).toBe(
@@ -357,7 +357,7 @@ describe('live previews in the chat', () => {
 		);
 
 		unmount(app);
-		pullRequests.tabs = {};
+		state.page.data = { inbox: view([]) };
 		start(records, { tasks: [task], projects: [{ id: 'lumen', name: 'Lumen' }] });
 		expect(card().querySelector('a[data-review-pr]')).toBeNull();
 		expect(card().querySelector(`a[href="${pr}"]`)?.textContent).toMatch(/Pull request #212/);

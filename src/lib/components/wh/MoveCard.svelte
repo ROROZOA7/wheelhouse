@@ -5,7 +5,7 @@
 	import { awaitingReview, reviewView } from '$lib/review';
 	import { Compass, ExternalLink, Images, MessagesSquare, MonitorPlay } from '@lucide/svelte';
 	import { hintLine } from '$lib/buildlog';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import CardPreview from './CardPreview.svelte';
 	import ShotStrip from './ShotStrip.svelte';
 	import StageTrack from './StageTrack.svelte';

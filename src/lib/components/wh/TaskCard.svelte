@@ -14,7 +14,7 @@
 	import ShotStrip from './ShotStrip.svelte';
 	import StageTrack from './StageTrack.svelte';
 	import Thumb from './Thumb.svelte';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import { Compass, ExternalLink } from '@lucide/svelte';
 	import { tone, textClass } from './tone';
 

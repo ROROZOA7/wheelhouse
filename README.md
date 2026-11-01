@@ -75,7 +75,6 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
   ![The passage editor testing a new Deployed locally step on a landed task: where the task would be, and the local deploy's output](docs/screenshots/passage-editor.png)
 
-
 - 🖥️ **Live preview.** Click around the real app and send feedback to the worker.
 
   ![A live preview of the app under review, with feedback sent to the worker and Firstmate's reply beside it](docs/screenshots/preview.png)

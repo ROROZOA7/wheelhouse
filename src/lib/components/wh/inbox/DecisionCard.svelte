@@ -32,7 +32,7 @@
 		X
 	} from '@lucide/svelte';
 	import { ago } from '$lib/format';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import { markdown } from '$lib/chat/markdown';
 	import {
 		WRITTEN_MAX,

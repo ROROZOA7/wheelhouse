@@ -12,7 +12,7 @@
 	} from '@lucide/svelte';
 	import type { ChatPreview } from '$lib/chat/previews';
 	import { ago } from '$lib/format';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import LivePreview from '$lib/components/wh/LivePreview.svelte';
 	import PreviewStudio from '$lib/components/wh/PreviewStudio.svelte';
 

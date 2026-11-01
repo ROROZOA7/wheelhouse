@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { TaskSummary } from '$lib/types';
 	import { plural } from '$lib/format';
-	import { pullRequests } from '$lib/client/pullrequests.svelte';
+	import { pullRequests } from '$lib/client/pullrequests';
 	import { Compass, ExternalLink, MessageCircleQuestion } from '@lucide/svelte';
 	import StageTrack from '../StageTrack.svelte';
 	import { dotClass, textClass, tone } from '../tone';
