@@ -37,7 +37,18 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
 ## 🎬 Take the tour
 
-Two minutes on the chat, decisions, the Harbour, a project, a task, PR review and plugins. In Wheelhouse, **Help** (the ? in the header) brings it back.
+A two-minute captioned tour of Wheelhouse, chapter by chapter:
+
+1. **The chat** with Firstmate, and the live previews that show as cards under its replies.
+2. **Answering a decision** in its card, right in the chat.
+3. **The Harbour**: every project at a glance.
+4. **A project page**: its work, what needs you and what landed.
+5. **A task page**, with its live console.
+6. **PR review**: Review PR on a task opens the pull request in the [PR review](https://github.com/chrisjowen/pr-review-wheelhouse) plugin's tab.
+7. **Plugins** in Settings.
+8. **Help**: the ? in Wheelhouse's header brings this tour back.
+
+Until the video is up, the two animated clips under [What you get](#-what-you-get) show the busiest parts: answering a decision in the chat, and reviewing a pull request in the PR review plugin's tab.
 
 <!-- TOUR VIDEO: drag tour.mp4 into GitHub's editor and put the https://github.com/user-attachments/assets/… address it gives you on its own line here, in place of this comment (see docs/development.md#recording-the-guide). -->
 

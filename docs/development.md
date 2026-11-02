@@ -63,7 +63,7 @@ The clips are committed. The tour is not, and it is not in the npm package: it i
 1. Edit `README.md` on GitHub (or any issue or pull request comment box) and drag `tour.mp4` in. GitHub uploads it and inserts a `https://github.com/user-attachments/assets/…` address (up to 10 MB on a free plan).
 2. Put that address on its own line in the README's **Take the tour** section, in place of the previous one (or of the placeholder comment), and commit.
 
-**Help** in Wheelhouse's header plays the tour from where it is hosted; nothing is bundled. By default it opens the README's tour section; set `WHEELHOUSE_TOUR_URL` to the uploaded video's address and it plays inside Wheelhouse instead.
+**Help** in Wheelhouse's header plays the tour from where it is hosted; nothing is bundled. By default it opens the README's tour section, which plays the video once it is uploaded and, until then, describes the tour's chapters and points at the two clips; set `WHEELHOUSE_TOUR_URL` to the uploaded video's address and it plays inside Wheelhouse instead.
 
 ## Continuous integration
 
