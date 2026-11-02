@@ -218,6 +218,37 @@ describe('ServiceSupervisor', () => {
 		expect(given).toMatchObject({ state: 'failed', log: 'the log\n' });
 	});
 
+	it('waits between starts of a service that came up and then crashed', async () => {
+		const { manager, state, sup, settle } = setup([review]);
+		await sup.reconcile();
+		await settle();
+		manager.running.delete('review-engine');
+		// Pages asking again and again, straight after the crash: nothing starts.
+		for (let i = 0; i < MAX_AUTO_STARTS + 1; i++) {
+			expect(await sup.ensure('review-engine', spec(4000), 'background')).toMatchObject({
+				state: 'stopped'
+			});
+		}
+		expect(manager.launches).toHaveLength(1);
+		state.now += RETRY_MS;
+		await sup.reconcile();
+		await settle();
+		expect(manager.launches).toHaveLength(2);
+		expect(manager.running.has('review-engine')).toBe(true);
+	});
+
+	it('shows a start that threw as failed, rather than an unhandled rejection', async () => {
+		const { manager, sup } = setup([]);
+		manager.launch = () => Promise.reject(new Error('EACCES: permission denied'));
+		await sup.ensure('review-engine', spec(4000), 'background');
+		await Promise.resolve();
+		expect(await sup.ensure('review-engine', spec(4000), 'wait')).toMatchObject({
+			state: 'failed',
+			reason: 'It did not start: EACCES: permission denied.',
+			log: 'the log\n'
+		});
+	});
+
 	it('turning the plugin off and on again starts afresh', async () => {
 		const { manager, state, sup, settle } = setup([review]);
 		manager.fails.add('review-engine');

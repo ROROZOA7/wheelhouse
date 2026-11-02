@@ -154,7 +154,11 @@ export class ServiceManager {
 		while (this.now() < until && (await ours())) {
 			await new Promise((r) => setTimeout(r, POLL_MS));
 		}
-		if (await ours()) this.signal(record.pid, 'SIGKILL');
+		try {
+			this.processes.kill(-record.pid, 'SIGKILL');
+		} catch {
+			// the whole group is gone
+		}
 		this.forget(key);
 		return true;
 	}

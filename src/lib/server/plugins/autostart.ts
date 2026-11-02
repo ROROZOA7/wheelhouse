@@ -172,7 +172,7 @@ export class ServiceSupervisor {
 		t.at = t.at.filter((at) => now - at < AUTO_WINDOW_MS);
 		if (t.gaveUp) return this.givenUp(key, spec, t);
 		const last = t.at.at(-1);
-		if (t.failure && last !== undefined && now - last < RETRY_MS) return t.failure;
+		if (last !== undefined && now - last < RETRY_MS) return t.failure ?? status;
 		if (t.at.length >= MAX_AUTO_STARTS) {
 			t.gaveUp = true;
 			this.log(`Services:   ${key} did not stay up, so Wheelhouse no longer starts it on its own.`);
@@ -180,10 +180,20 @@ export class ServiceSupervisor {
 		}
 		t.at.push(now);
 		this.log(`Services:   starting ${key}${t.at.length > 1 ? ' again; it was not running' : ''}.`);
-		const done = manager.launch(key, spec).then((s) => {
-			t.failure = s.state === 'failed' ? s : null;
-			return s;
-		});
+		const done = manager
+			.launch(key, spec)
+			.catch(
+				(e): ServiceStatus => ({
+					state: 'failed',
+					url: spec.url,
+					reason: `It did not start: ${(e as Error).message}.`,
+					log: manager.log(key)
+				})
+			)
+			.then((s) => {
+				t.failure = s.state === 'failed' ? s : null;
+				return s;
+			});
 		return how === 'wait' ? done : { state: 'starting', url: spec.url, reason: null };
 	}
 

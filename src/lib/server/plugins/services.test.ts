@@ -271,7 +271,11 @@ describe('ServiceManager', () => {
 			}
 		});
 		expect(await same.stop('old')).toBe(true);
-		expect(killed).toEqual([[-4242, 'SIGTERM']]);
+		// The leader is gone, but the rest of its group is still killed.
+		expect(killed).toEqual([
+			[-4242, 'SIGTERM'],
+			[-4242, 'SIGKILL']
+		]);
 	});
 
 	it('reads the elapsed time ps reports', () => {
