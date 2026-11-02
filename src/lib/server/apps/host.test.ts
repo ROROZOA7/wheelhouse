@@ -9,7 +9,7 @@ import { loadOne } from '../plugins/loader';
 import type { ServicePorts } from '../plugins/ports';
 import { PluginRegistry } from '../plugins/registry';
 import type { ToolCall } from '../sessions/transcript';
-import { AppHost, appHtml, chatResult, endpointUrl } from './host';
+import { AppHost, appHtml, chatResult, endpointUrl, type AppHostDeps } from './host';
 import { Sandboxes, SANDBOX_PATH } from './sandbox';
 
 /**
@@ -226,18 +226,51 @@ describe('an MCP app in the chat', () => {
 		expect((await fresh.chatApps(['c1'])).apps).toEqual({});
 	});
 
-	it('opens the app with the call’s own arguments, reading only its UI from the server', async () => {
-		const before = server.state.calls.length;
-		const v = await host.open(chat);
-		expect(v).toMatchObject({
+	it('opens the app with the call’s own arguments', async () => {
+		expect(await host.open(chat)).toMatchObject({
 			state: 'ready',
 			server: { id: 'demo' },
 			tool: { name: 'show_status' },
 			csp: { connectDomains: ['https://api.example.com'] },
 			input: { name: 'Ada' }
 		});
-		// The result is the one Firstmate had: the tool is not called again.
-		expect(await host.run(chat)).toEqual({
+		expect(await host.run({ chat: 'c4' })).toMatchObject({ ok: false, reason: /no result yet/ });
+	});
+
+	it('runs a read-only tool again on the app’s own server, with the call’s arguments', async () => {
+		// Firstmate's server answered in a shape this app cannot draw (another install or version).
+		calls.c1.result = text(JSON.stringify({ schema: 'older', count: 1 }));
+		const before = server.state.calls.length;
+		expect(await host.run(chat)).toMatchObject({
+			ok: true,
+			result: { structuredContent: { greeting: 'Hello, Ada!' } }
+		});
+		expect(server.state.calls.slice(before)).toEqual([
+			{ name: 'show_status', arguments: { name: 'Ada' } }
+		]);
+		expect(log).toContainEqual(expect.stringMatching(/ran show_status again for a chat call/));
+		// Too large to keep from the transcript is no matter: the server answers afresh.
+		expect(await host.run({ chat: 'c5' })).toMatchObject({ ok: true });
+	});
+
+	it('hands over Firstmate’s result when the server cannot say the tool only reads', async () => {
+		const before = server.state.calls.length;
+		const down = new AppHost({
+			toolCall: (id) => calls[id] ?? null,
+			registry: {
+				app: (r: Parameters<AppHostDeps['registry']['app']>[0]) => registry.app(r),
+				chatApp: (n: string, i: Record<string, unknown>) => registry.chatApp(n, i),
+				// Nothing listens on the discard port.
+				service: async () => ({
+					title: 'the demo MCP server',
+					resolution: { available: true, spec: { url: 'http://127.0.0.1:9/' } }
+				})
+			} as unknown as AppHostDeps['registry'],
+			serviceView: async () => null,
+			sandbox: (key, csp) => sandboxes.url(key, csp),
+			version: '1.0.0'
+		});
+		expect(await down.run(chat)).toEqual({
 			ok: true,
 			result: {
 				content: [{ type: 'text', text: '{"greeting":"Hello, Ada!","count":7}' }],
@@ -245,8 +278,26 @@ describe('an MCP app in the chat', () => {
 			}
 		});
 		expect(server.state.calls).toHaveLength(before);
-		expect(await host.run({ chat: 'c4' })).toMatchObject({ ok: false, reason: /no result yet/ });
-		expect(await host.run({ chat: 'c5' })).toMatchObject({ ok: false, reason: /too large/ });
+	});
+
+	it('hands any other tool’s app the result Firstmate’s call had, without calling it again', async () => {
+		calls.c6 = {
+			id: 'c6',
+			name: 'mcp__demo__bump_count',
+			input: {},
+			result: text(JSON.stringify({ count: 7 }))
+		};
+		calls.c7 = { ...calls.c6, id: 'c7', result: { tooLarge: true } };
+		const before = server.state.calls.length;
+		expect(await host.run({ chat: 'c6' })).toEqual({
+			ok: true,
+			result: {
+				content: [{ type: 'text', text: '{"count":7}' }],
+				structuredContent: { count: 7 }
+			}
+		});
+		expect(await host.run({ chat: 'c7' })).toMatchObject({ ok: false, reason: /too large/ });
+		expect(server.state.calls).toHaveLength(before);
 	});
 
 	it('holds what the app asks for to the same policy as in a slot', async () => {

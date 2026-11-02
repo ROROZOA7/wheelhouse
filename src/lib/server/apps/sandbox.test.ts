@@ -112,6 +112,72 @@ describe('the MCP app sandbox', () => {
 	it('keeps the host origin from breaking out of its script', () => {
 		expect(sandboxPage('http://127.0.0.1:1</script>')).not.toContain('</script>"');
 	});
+
+	it('tells the page of the app’s first uncaught error, which the app cannot forge', () => {
+		const HOST = 'http://127.0.0.1:4310';
+		const script = /<script>([\s\S]*)<\/script>/.exec(sandboxPage(HOST))![1];
+		type Listener = (e: unknown) => void;
+		const steps: string[] = [];
+		const toPage: { message: Record<string, unknown>; origin: string }[] = [];
+		const appListeners: Record<string, Listener[]> = {};
+		const app = {
+			addEventListener: (type: string, fn: Listener) => {
+				steps.push(`listen ${type}`);
+				(appListeners[type] ??= []).push(fn);
+			},
+			postMessage: () => {}
+		};
+		const inner = {
+			setAttribute: () => {},
+			contentWindow: app,
+			contentDocument: {
+				open: () => steps.push('open'),
+				write: () => steps.push('write'),
+				close: () => {}
+			}
+		};
+		const parent = {
+			postMessage: (message: never, origin: string) => toPage.push({ message, origin })
+		};
+		let onMessage: Listener = () => {};
+		const win = {
+			self: {},
+			top: {},
+			parent,
+			addEventListener: (_: string, fn: Listener) => (onMessage = fn)
+		};
+		const doc = { createElement: () => inner, body: { appendChild: () => {} } };
+		new Function('window', 'document', script)(win, doc);
+		onMessage({
+			source: parent,
+			origin: HOST,
+			data: { method: 'ui/notifications/sandbox-resource-ready', params: { html: '<p>app</p>' } }
+		});
+		// Listening after open(), which clears a window's listeners, and before the app runs.
+		expect(steps).toEqual(['open', 'listen error', 'listen unhandledrejection', 'write']);
+		// The app cannot say it on its own behalf.
+		onMessage({
+			source: app,
+			origin: 'null',
+			data: { method: 'ui/notifications/sandbox-app-error', params: { message: 'forged' } }
+		});
+		const fail = {
+			name: 'TypeError',
+			message: "Cannot read properties of undefined (reading 'length')"
+		};
+		appListeners.error[0]({ error: fail, message: 'Uncaught TypeError' });
+		appListeners.unhandledrejection[0]({ reason: 'later' });
+		expect(toPage.slice(1)).toEqual([
+			{
+				message: {
+					jsonrpc: '2.0',
+					method: 'ui/notifications/sandbox-app-error',
+					params: { message: "TypeError: Cannot read properties of undefined (reading 'length')" }
+				},
+				origin: HOST
+			}
+		]);
+	});
 });
 
 describe('the sandboxes, one for each MCP server', () => {

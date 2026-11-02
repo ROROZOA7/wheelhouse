@@ -239,6 +239,27 @@ describe('an MCP app in a slot', () => {
 		unmount(c);
 	});
 
+	it('says so when the app stops with an error, rather than leave it half drawn', async () => {
+		const c = mount(AppFrame, { target: document.body, props: frameProps });
+		await settle();
+		const { send } = frame();
+		const error = (message: string) => ({
+			jsonrpc: '2.0',
+			method: 'ui/notifications/sandbox-app-error',
+			params: { message }
+		});
+		// Only the app's own sandbox can say so.
+		send(error('from elsewhere'), 'http://127.0.0.1:6001');
+		await settle();
+		expect(document.querySelector('[role="alert"]')).toBeNull();
+		send(error("TypeError: Cannot read properties of undefined (reading 'length')"));
+		await settle();
+		expect(document.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+			"The app stopped with an error, so what it shows may be stale or unfinished: TypeError: Cannot read properties of undefined (reading 'length')"
+		);
+		unmount(c);
+	});
+
 	it('keeps a queued question waiting for the captain after they agree to the first', async () => {
 		answers['/api/apps/call'] = (body) =>
 			body.confirmed

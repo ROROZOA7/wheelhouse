@@ -31,9 +31,10 @@ import { McpError, McpHttpClient } from './mcp';
  * - `resources/read` reaches only its own server.
  *
  * An app can also show in the chat, under a tool call Firstmate made to a
- * plugin's MCP server whose tool has a UI: the call's arguments and its result
- * come from Firstmate's transcript, and Wheelhouse reads only the UI from the
- * server; what the app then asks for goes through the same policy.
+ * plugin's MCP server whose tool has a UI: the call's arguments come from
+ * Firstmate's transcript, and so does its result unless the tool only reads,
+ * when Wheelhouse runs it again on the app's own server; what the app then
+ * asks for goes through the same policy.
  *
  * Every call an app makes is logged, as is each app's policy when it opens.
  * Wheelhouse connects to no MCP server but those plugins declare, and only on
@@ -210,14 +211,30 @@ export class AppHost {
 	}
 
 	/**
-	 * Wheelhouse's own call of the app's tool, with the provider's arguments;
-	 * in the chat, the result Firstmate's call had, without calling it again.
+	 * Wheelhouse's own call of the app's tool, with the provider's arguments.
+	 * In the chat, a tool that says it only reads runs again, with the
+	 * arguments of Firstmate's call, on the server the app comes from: the
+	 * server that answered Firstmate may be another install, of another
+	 * version or for another project, whose result this app cannot draw. Any
+	 * other tool's app gets the result Firstmate's call had, without calling
+	 * it again.
 	 */
 	async run(ref: AppRef): Promise<AppCallView<CallToolResult> | null> {
 		if ('chat' in ref) {
 			const call = this.deps.toolCall?.(ref.chat) ?? null;
-			if (!call || !(await this.target(ref))) return null;
+			const target = call ? await this.target(ref) : null;
+			if (!call || !target) return null;
 			if (!call.result) return { ok: false, reason: 'Firstmate’s call has no result yet.' };
+			if (await this.readOnly(target)) {
+				this.log(
+					`MCP app ${target.plugin.id}/${target.server.id}: ran ${target.tool} again for a chat call (read-only).`
+				);
+				return this.withServer(target, (client) =>
+					client
+						.request('tools/call', { name: target.tool, arguments: call.input }, RUN_TIMEOUT_MS)
+						.then(toolResult)
+				);
+			}
 			if ('tooLarge' in call.result) {
 				return { ok: false, reason: 'its result is too large to hand to the app.' };
 			}
@@ -362,6 +379,19 @@ export class AppHost {
 		} catch (e) {
 			if (!(e instanceof McpError) || e.code === null) this.forget(url.value);
 			return { ok: false, reason: `${target.server.title}: ${message(e)}` };
+		}
+	}
+
+	/** Whether a target's tool says it only reads (false when its server cannot say). */
+	private async readOnly(target: AppTarget): Promise<boolean> {
+		const url = await this.endpoint(target);
+		if (!url.ok) return false;
+		try {
+			const tool = (await this.listTools(url.value)).find((t) => t.name === target.tool);
+			return tool?.annotations?.readOnlyHint === true;
+		} catch {
+			this.forget(url.value);
+			return false;
 		}
 	}
 

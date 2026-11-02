@@ -28,7 +28,9 @@
 	/**
 	 * An MCP app in a plugin slot, or under a tool call in the chat. In a slot,
 	 * Wheelhouse calls the app's tool itself with the provider's arguments; in
-	 * the chat, the app gets the arguments and result of Firstmate's call. It draws the app's own HTML in a frame on the
+	 * the chat, the app gets the arguments of Firstmate's call and its result,
+	 * or for a read-only tool the result of running it again on the app's own
+	 * server. It draws the app's own HTML in a frame on the
 	 * sandbox's origin (a loopback port for its server alone), never
 	 * Wheelhouse's: the app cannot reach this page, its session token,
 	 * Wheelhouse's API or another server's app. It talks to
@@ -36,8 +38,9 @@
 	 * calls and reads reach its own server only, a call that may change
 	 * something waits for the captain's agreement, a message to Firstmate is
 	 * shown first and sent only when the captain says so, and links open in a
-	 * new tab. When the app's server is not running, the captain can start it
-	 * here.
+	 * new tab. An error the app does not catch, which the sandbox reports, is
+	 * shown under it. When the app's server is not running, the captain can
+	 * start it here.
 	 */
 	let {
 		ref,
@@ -66,6 +69,8 @@
 	let serverTitle = $state('');
 	let failure = $state<string | null>(null);
 	let note = $state<string | null>(null);
+	/** The app's first uncaught error, which the sandbox reports. */
+	let crash = $state<string | null>(null);
 	let starting = $state(false);
 	let height = $state(160);
 	let mode = $state<DisplayMode>('inline');
@@ -107,6 +112,7 @@
 
 	async function open() {
 		phase = 'opening';
+		crash = null;
 		failure = null;
 		try {
 			const v = await openApp(ref, token());
@@ -302,6 +308,11 @@
 		const onMessage = (event: MessageEvent) => {
 			if (event.source !== el.contentWindow || event.origin !== sandboxOrigin) return;
 			const m = event.data as { method?: unknown } | null;
+			if (m && m.method === 'ui/notifications/sandbox-app-error') {
+				const params = (m as { params?: { message?: unknown } }).params;
+				crash = typeof params?.message === 'string' ? params.message : 'an unknown error';
+				return;
+			}
 			if (m && m.method === 'ui/notifications/sandbox-proxy-ready') {
 				if (served) return;
 				served = true;
@@ -405,6 +416,11 @@
 			? `; it may reach ${origins.join(', ')}`
 			: ', with no network access'}.{note ? ` ${note}` : ''}
 	</p>
+	{#if crash}
+		<p class="text-sm text-danger {fill ? 'px-4 pt-1.5 sm:px-6' : 'mt-1.5'}" role="alert">
+			The app stopped with an error, so what it shows may be stale or unfinished: {crash}
+		</p>
+	{/if}
 {/if}
 
 <dialog

@@ -15,7 +15,8 @@ import type { RequestHandler } from './$types';
  * - `chat` `{ calls: [<tool_use id>] }`: which of those chat tool calls have an app
  * - `open`: the app's HTML, policy, tool and arguments, or its service's status
  * - `run`: Wheelhouse's own call of the app's tool, with the provider's arguments
- *   (in the chat, the result Firstmate's call had)
+ *   (in the chat, a read-only tool runs again with the call's arguments; any
+ *   other gets the result Firstmate's call had)
  * - `call` `{ name, arguments, confirmed? }`: a `tools/call` the app made;
  *   409 with `confirm` when the captain must agree to it first, 403 when
  *   Wheelhouse's policy refuses it

@@ -42,7 +42,16 @@ function proxyScript(host: string): string {
 	inner.setAttribute('title', 'MCP app');
 	document.body.appendChild(inner);
 	let loaded = false;
+	let failed = false;
 	const reserved = (m) => !!m && typeof m.method === 'string' && m.method.startsWith(RESERVED);
+	// The app's first uncaught error, so the page can say so rather than leave it half drawn.
+	const fail = (what) => {
+		if (failed) return;
+		failed = true;
+		const named = what && typeof what.name === 'string' && typeof what.message === 'string';
+		const message = String(named ? what.name + ': ' + what.message : what || 'an unknown error').slice(0, 500);
+		window.parent.postMessage({ jsonrpc: '2.0', method: RESERVED + 'app-error', params: { message } }, HOST);
+	};
 	window.addEventListener('message', (event) => {
 		const m = event.data;
 		if (event.source === window.parent) {
@@ -55,6 +64,10 @@ function proxyScript(host: string): string {
 				const doc = inner.contentDocument;
 				if (doc) {
 					doc.open();
+					// After open(), which clears the window's listeners, and before the app's scripts run.
+					const win = inner.contentWindow;
+					win.addEventListener('error', (e) => fail(e.error || e.message));
+					win.addEventListener('unhandledrejection', (e) => fail(e.reason));
 					doc.write(html);
 					doc.close();
 				} else {
