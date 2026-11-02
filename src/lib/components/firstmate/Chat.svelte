@@ -66,8 +66,8 @@
 	 * captain's messages, Firstmate's replies, its work folded into one line per
 	 * run, its questions as buttons, and a way out of any Claude Code menu (such
 	 * as /mcp's) the chat cannot use. A tool call to a plugin's MCP server
-	 * whose tool has an app shows that app under its message, closed until the
-	 * captain opens it. Any message can be replied to, as in WhatsApp, with
+	 * whose tool has an app shows that app under its message, expanded until the
+	 * captain collapses it. Any message can be replied to, as in WhatsApp, with
 	 * its quote carried in the text sent (see lib/chat/reply.ts). The captain's
 	 * attached files show as a card under their message (SentFiles), and files
 	 * dropped on the chat are attached to the next one. Quiet background checks
@@ -253,6 +253,8 @@
 			}
 		);
 	});
+	// Apps open expanded; the ones the captain collapsed stay so while the chat is open.
+	let collapsedApps = $state<Record<string, boolean>>({});
 	let openNotice = $state<Record<string, boolean>>({});
 	let starting = $state(false);
 	let startError = $state<string | null>(null);
@@ -286,6 +288,18 @@
 		void discussed;
 		void firstmateChat.resets;
 		if (stick) void tick().then(() => scroller?.scrollTo({ top: scroller.scrollHeight }));
+	});
+	// What lands grows after it is drawn (an expanded app sizes its frame to the app): keep
+	// following the latest while the captain is at the bottom.
+	let thread = $state<HTMLDivElement | null>(null);
+	$effect(() => {
+		const el = scroller;
+		if (!thread || !el) return;
+		const watch = new ResizeObserver(() => {
+			if (atBottom) el.scrollTo({ top: el.scrollHeight });
+		});
+		watch.observe(thread);
+		return () => watch.disconnect();
 	});
 
 	/** Five minutes or less after a message from the same sender: shown under it, without a header. */
@@ -666,7 +680,7 @@
 			onscroll={() => (atBottom = nearBottom())}
 			class="no-scrollbar h-full overflow-y-auto"
 		>
-			<div class="flex flex-col gap-6 px-4 pt-8 pb-10 sm:px-6 lg:px-10">
+			<div bind:this={thread} class="flex flex-col gap-6 px-4 pt-8 pb-10 sm:px-6 lg:px-10">
 				{#if firstmateChat.source?.truncated}
 					<p class="text-xs text-muted-foreground">
 						Earlier messages are not shown here; the full conversation is in Firstmate’s terminal.
@@ -823,7 +837,13 @@
 									{:else}
 										<Activity steps={part.steps} live={isLive(item, pi)} />
 										{#each part.steps as step (step.id)}
-											{#if apps[step.id]}<ChatApp id={step.id} app={apps[step.id]} />{/if}
+											{#if apps[step.id]}<ChatApp
+													id={step.id}
+													app={apps[step.id]}
+													bind:open={
+														() => !collapsedApps[step.id], (v) => (collapsedApps[step.id] = !v)
+													}
+												/>{/if}
 										{/each}
 									{/if}
 								{/each}

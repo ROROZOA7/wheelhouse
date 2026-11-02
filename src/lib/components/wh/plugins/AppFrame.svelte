@@ -25,6 +25,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import type { ServiceView } from '$lib/plugins/types';
 
+	const MAX_HEIGHT = 720;
+
 	/**
 	 * An MCP app in a plugin slot, or under a tool call in the chat. In a slot,
 	 * Wheelhouse calls the app's tool itself with the provider's arguments; in
@@ -43,7 +45,8 @@
 		ref,
 		title,
 		plugin,
-		fill = false
+		fill = false,
+		maxHeight = MAX_HEIGHT
 	}: {
 		/** Which app: a slot's contribution, or a chat tool call. */
 		ref: AppRef;
@@ -52,9 +55,10 @@
 		/** The plugin whose MCP server it comes from. */
 		plugin: string;
 		fill?: boolean;
+		/** The most an inline app grows to, in pixels; full screen has more. */
+		maxHeight?: number;
 	} = $props();
 
-	const MAX_HEIGHT = 720;
 	const token = () => (page.data.sessionToken as string) ?? '';
 	const version = () => (page.data.health as { version?: string } | undefined)?.version ?? '0.0.0';
 
@@ -162,7 +166,7 @@
 		const r = box?.getBoundingClientRect() ?? { width: 0, height: 0 };
 		return mode === 'fullscreen'
 			? { width: Math.round(window.innerWidth), height: Math.round(window.innerHeight) }
-			: containerDimensions(r, fill, MAX_HEIGHT);
+			: containerDimensions(r, fill, maxHeight);
 	};
 
 	// The bridge to one opened app: made when its frame is, gone with it (and nothing else reruns it).
@@ -240,7 +244,7 @@
 			resize({ height: h }) {
 				// Full screen and a page the app fills have a fixed size; elsewhere it grows with the app.
 				if (h !== undefined && !fill && mode === 'inline') {
-					height = Math.max(40, Math.min(h, MAX_HEIGHT));
+					height = Math.max(40, Math.min(h, maxHeight));
 				}
 			},
 			log(level, data) {

@@ -363,3 +363,98 @@ describe('live previews in the chat', () => {
 		expect(card().querySelector(`a[href="${pr}"]`)?.textContent).toMatch(/Pull request #212/);
 	});
 });
+
+describe('MCP apps in the chat', () => {
+	const search = (uuid: string, m: string) =>
+		record(uuid, m, {
+			type: 'assistant',
+			message: {
+				id: uuid,
+				role: 'assistant',
+				content: [
+					{
+						type: 'tool_use',
+						id: 'toolu_1',
+						name: 'mcp__docket__docket_search',
+						input: { query: 'billing' }
+					}
+				]
+			}
+		});
+	const found = (uuid: string, m: string) =>
+		record(uuid, m, {
+			type: 'user',
+			message: {
+				role: 'user',
+				content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: '{"hits":[]}' }]
+			}
+		});
+	const READY = {
+		schema: 'wheelhouse-app.v1',
+		state: 'ready',
+		server: { id: 'docket', title: 'Docket' },
+		tool: { name: 'docket_search' },
+		html: '<!doctype html><p>graph</p>',
+		csp: {},
+		prefersBorder: true,
+		input: { query: 'billing' },
+		sandbox: 'http://127.0.0.1:5999/sandbox.html?csp=%7B%7D&sig=signed'
+	};
+	const CARD = '[data-chat-app="toolu_1"]';
+	const toggle = () => document.querySelector<HTMLButtonElement>(`${CARD} button`)!;
+	const opened = () => fetchMock.mock.calls.filter(([u]) => u === '/api/apps/open').length;
+
+	it('opens an app expanded, keeps it up as the chat goes on, and remembers a collapse', async () => {
+		fetchMock.mockImplementation(async (url: string) =>
+			url === '/api/apps/chat'
+				? Response.json({
+						schema: 'wheelhouse-chat-apps.v1',
+						apps: {
+							toolu_1: {
+								plugin: 'docket',
+								server: { id: 'docket', title: 'Docket' },
+								title: 'Search'
+							}
+						}
+					})
+				: url === '/api/apps/open'
+					? Response.json(READY)
+					: Response.json({})
+		);
+		const records = [
+			captain('u1', '00', 'What does billing touch?'),
+			search('a1', '01'),
+			found('r1', '01')
+		];
+		start(records);
+		await vi.waitFor(() => expect(document.querySelector(`${CARD} iframe`)).not.toBeNull());
+		expect(toggle().getAttribute('aria-expanded')).toBe('true');
+		expect(opened()).toBe(1);
+
+		// More of the conversation lands: the app stays up, not opened (or run) again.
+		firstmateChat.records = [
+			...records,
+			firstmate('a2', '02', 'Billing touches three services.'),
+			done('d1', '02')
+		];
+		flushSync();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(document.querySelector(`${CARD} iframe`)).not.toBeNull();
+		expect(opened()).toBe(1);
+
+		// Collapsed, it stays collapsed as the chat goes on.
+		toggle().click();
+		flushSync();
+		expect(document.querySelector(`${CARD} iframe`)).toBeNull();
+		firstmateChat.records = [
+			...firstmateChat.records,
+			captain('u2', '03', 'Thanks.'),
+			firstmate('a3', '04', 'Any time.'),
+			done('d2', '04')
+		];
+		flushSync();
+		expect(toggle().getAttribute('aria-expanded')).toBe('false');
+		expect(document.querySelector(`${CARD} iframe`)).toBeNull();
+		expect(opened()).toBe(1);
+	});
+});
