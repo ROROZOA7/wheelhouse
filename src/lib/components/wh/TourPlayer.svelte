@@ -25,7 +25,7 @@
 		preload="metadata"
 	></video>
 {:else}
-	<p>The tour plays on GitHub, at the top of Wheelhouse’s README.</p>
+	<p>The tour is in Wheelhouse’s README on GitHub.</p>
 {/if}
 <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 	<Button variant="ghost" href={GUIDE} target="_blank" rel="noopener noreferrer"
