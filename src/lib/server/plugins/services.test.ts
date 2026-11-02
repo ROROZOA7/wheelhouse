@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ServiceSpec } from '../../plugins/types';
-import { launchable, refuseSpec, ServiceManager, serviceEnv } from './services';
+import {
+	launchable,
+	parseElapsed,
+	refuseSpec,
+	ServiceManager,
+	serviceEnv,
+	type Processes
+} from './services';
 
 /**
  * The service manager against a real (tiny) server: it starts a service
@@ -205,5 +212,72 @@ describe('ServiceManager', () => {
 		expect((await m.status('t-all', s)).reason).toContain('every network interface');
 		expect(await m.launch('t-all', s)).toMatchObject({ state: 'unavailable' });
 		expect(existsSync(path.join(dir, 'logs', 't-all.log'))).toBe(false);
+	});
+
+	it('stops a service it started, its whole process group, and forgets it', async () => {
+		const port = await freePort();
+		const s = spec(port);
+		const logDir = path.join(dir, 'logs-stop');
+		const m = new ServiceManager({ logDir });
+		expect(await m.launch('t-stop', s)).toMatchObject({ state: 'running' });
+		started.push(s.url);
+		expect(m.started()).toEqual(['t-stop']);
+		// Another Wheelhouse reading the same state directory (say, after a restart) can stop it too.
+		const again = new ServiceManager({ logDir });
+		expect(await again.stop('t-stop')).toBe(true);
+		expect(await m.status('t-stop', s)).toMatchObject({ state: 'stopped' });
+		expect(again.started()).toEqual([]);
+		expect(await again.stop('t-stop')).toBe(false);
+
+		// Asked to stop while it is still starting: it stops once the start ends.
+		const starting = m.launch('t-stop', s);
+		expect(await m.stop('t-stop')).toBe(true);
+		expect(await starting).toMatchObject({ state: 'running' });
+		expect(await m.status('t-stop', s)).toMatchObject({ state: 'stopped' });
+	});
+
+	it('never stops one it did not start, or a later process given the same pid', async () => {
+		const logDir = path.join(dir, 'logs-pid');
+		mkdirSync(logDir, { recursive: true });
+		const killed: [number, string][] = [];
+		const processes = (startedAt: number | null): Processes => ({
+			startedAt: async () => startedAt,
+			kill: (pid, signal) => void killed.push([pid, signal])
+		});
+		writeFileSync(
+			path.join(logDir, 'started.json'),
+			JSON.stringify({ old: { pid: 4242, at: 1_000_000 }, bad: { pid: 'x', at: 1 } })
+		);
+		const later = new ServiceManager({ logDir, processes: processes(1_000_000 + 60_000) });
+		expect(later.started()).toEqual(['old']);
+		expect(await later.stop('old')).toBe(false);
+		expect(await later.stop('never-started')).toBe(false);
+		expect(killed).toEqual([]);
+		expect(later.started()).toEqual([]);
+
+		writeFileSync(
+			path.join(logDir, 'started.json'),
+			JSON.stringify({ old: { pid: 4242, at: 1_000_000 } })
+		);
+		let alive = true;
+		const same = new ServiceManager({
+			logDir,
+			processes: {
+				startedAt: async () => (alive ? 1_000_000 + 1_000 : null),
+				kill: (pid, signal) => {
+					killed.push([pid, signal]);
+					alive = false;
+				}
+			}
+		});
+		expect(await same.stop('old')).toBe(true);
+		expect(killed).toEqual([[-4242, 'SIGTERM']]);
+	});
+
+	it('reads the elapsed time ps reports', () => {
+		expect(parseElapsed('  01:05\n')).toBe(65_000);
+		expect(parseElapsed('2:00:00')).toBe(7_200_000);
+		expect(parseElapsed('1-00:00:01')).toBe(86_401_000);
+		expect(parseElapsed('')).toBeNull();
 	});
 });

@@ -49,7 +49,7 @@ export const readAppResource = (ref: AppRef, uri: string, token: string) =>
 export const chatApps = (calls: string[], token: string) =>
 	post<ChatAppsView>('chat', { calls }, token);
 
-/** Start a plugin's companion service (the captain's click), without opening a tab. */
+/** Launch a plugin's companion service (the captain's click), without opening a tab. */
 export async function startService(
 	r: { plugin: string; service: string; project: string | null },
 	token: string

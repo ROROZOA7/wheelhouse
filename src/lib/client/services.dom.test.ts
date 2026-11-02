@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addressRewrites } from './addresses.svelte';
-import { launchAndOpen } from './services';
+import { launchAndOpen, watchService } from './services';
 
 /** Starting a companion service from a page served at localhost:4310, and the tab it opens. */
 
@@ -39,5 +39,35 @@ describe('launchAndOpen', () => {
 		expect(tab.location.href).toBe('http://7000.localhost:4310/');
 		await launchAndOpen({ plugin: 'p', service: 's' }, 'token', 'http://localhost:7000/docs');
 		expect(tab.location.href).toBe('http://7000.localhost:4310/docs');
+	});
+});
+
+describe('watchService', () => {
+	it('looks again while the service is starting, and stops once it is not', async () => {
+		const states = ['starting', 'starting', 'running'];
+		const fetch = vi.fn(
+			async (_url: string) =>
+				new Response(JSON.stringify({ state: states.shift() ?? 'running' }), { status: 200 })
+		);
+		vi.stubGlobal('fetch', fetch);
+		const seen: string[] = [];
+		watchService({ plugin: 'p', service: 's', project: 'alpha' }, (v) => seen.push(v!.state), 5);
+		await vi.waitFor(() => expect(seen).toEqual(['starting', 'starting', 'running']));
+		await new Promise((r) => setTimeout(r, 30));
+		expect(fetch).toHaveBeenCalledTimes(3);
+		expect(String(fetch.mock.calls[0][0])).toBe('/api/services?plugin=p&service=s&project=alpha');
+	});
+
+	it('stops looking when asked', async () => {
+		const fetch = vi.fn(
+			async () => new Response(JSON.stringify({ state: 'starting' }), { status: 200 })
+		);
+		vi.stubGlobal('fetch', fetch);
+		const stop = watchService({ plugin: 'p', service: 's' }, () => {}, 5);
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+		stop();
+		const calls = fetch.mock.calls.length;
+		await new Promise((r) => setTimeout(r, 30));
+		expect(fetch.mock.calls.length).toBe(calls);
 	});
 });

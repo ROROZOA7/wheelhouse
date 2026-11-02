@@ -661,6 +661,36 @@ export class PluginRegistry {
 	}
 
 	/**
+	 * Every companion service whose plugin is on where it runs: a fleet one
+	 * where `service` would resolve it, a per-project one for each project the
+	 * plugin is on for. `complete` is false while the plugins file is broken,
+	 * when a service missing here may only be unknown.
+	 */
+	async wantedServices(): Promise<{
+		refs: { plugin: string; service: string; project: string | null }[];
+		complete: boolean;
+	}> {
+		const { config, error } = await this.config();
+		const fleet = this.host.fleet();
+		if (error) return { refs: [], complete: false };
+		const refs: { plugin: string; service: string; project: string | null }[] = [];
+		for (const plugin of this.loaded) {
+			if (!plugin.services?.length) continue;
+			const projects = fleet.projects.filter((p) => this.enabled(config, plugin, p));
+			const homeOn = this.homeDefault(plugin);
+			const fleetOn = homeOn === null ? projects.length > 0 : isEnabled(config, plugin, '', homeOn);
+			for (const sv of plugin.services) {
+				if (sv.scope === 'fleet') {
+					if (fleetOn) refs.push({ plugin: plugin.id, service: sv.id, project: null });
+				} else {
+					for (const p of projects) refs.push({ plugin: plugin.id, service: sv.id, project: p.id });
+				}
+			}
+		}
+		return { refs, complete: true };
+	}
+
+	/**
 	 * A plugin's companion service, resolved for the fleet or one project, with
 	 * its title; null when there is no such service for that scope. A plugin that
 	 * is off there resolves to "unavailable" with the reason.

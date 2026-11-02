@@ -2,14 +2,14 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { ArrowUpRight, Check, Copy, LoaderCircle, Play } from '@lucide/svelte';
-	import { launchAndOpen, serviceStatus } from '$lib/client/services';
+	import { launchAndOpen, watchService } from '$lib/client/services';
 	import type { ServiceView } from '$lib/plugins/types';
 
 	/**
-	 * A plugin's companion service, in one line: a link while it runs; a Launch
-	 * button while it does not and Wheelhouse can start it (only ever on this
-	 * click, never on load), which opens it once it answers; else why not, with
-	 * the command to start it by hand.
+	 * A plugin's companion service, in one line: a link while it runs (Wheelhouse
+	 * starts it where its plugin is on, so this says so while it starts); a Launch
+	 * button when it is not running and Wheelhouse can start it, which opens it
+	 * once it answers; else why not, with the command to start it by hand.
 	 */
 	let {
 		plugin,
@@ -34,9 +34,7 @@
 	const href = $derived(open ?? view?.url ?? null);
 	const notRunning = $derived(`${name} is not running.${view?.reason ? ` ${view.reason}` : ''}`);
 
-	onMount(() => {
-		serviceStatus({ plugin, service, project }).then((v) => (view = v));
-	});
+	onMount(() => watchService({ plugin, service, project }, (v) => (view = v ?? view)));
 
 	async function launch() {
 		starting = true;

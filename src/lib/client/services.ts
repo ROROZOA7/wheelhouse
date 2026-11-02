@@ -3,9 +3,10 @@ import { addressRewrites } from './addresses.svelte';
 import { SESSION_HEADER } from './messages';
 
 /**
- * Plugin companion services in the browser: read whether one is up, and start
- * it on the captain's click, then open it. Starting is a POST that carries the
- * session token, as every change Wheelhouse makes does.
+ * Plugin companion services in the browser: read whether one is up (which
+ * starts one that is stopped where its plugin is on, as Wheelhouse does on its
+ * own), and Launch it on the captain's click, then open it. Launch is a POST
+ * that carries the session token, as every change Wheelhouse makes does.
  */
 export interface ServiceRef {
 	plugin: string;
@@ -27,6 +28,32 @@ export async function serviceStatus(r: ServiceRef): Promise<ServiceView | null> 
 	} catch {
 		return null;
 	}
+}
+
+const WATCH_MS = 1_500;
+
+/**
+ * Read the service, and again every so often while it is starting, handing
+ * each answer to `seen`; returns a function that stops looking.
+ */
+export function watchService(
+	r: ServiceRef,
+	seen: (v: ServiceView | null) => void,
+	everyMs = WATCH_MS
+): () => void {
+	let stopped = false;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const look = async () => {
+		const v = await serviceStatus(r);
+		if (stopped) return;
+		seen(v);
+		if (v?.state === 'starting') timer = setTimeout(look, everyMs);
+	};
+	void look();
+	return () => {
+		stopped = true;
+		clearTimeout(timer);
+	};
 }
 
 /**

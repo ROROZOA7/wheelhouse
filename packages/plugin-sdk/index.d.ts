@@ -275,10 +275,13 @@ export interface ServiceView {
  */
 export interface PluginHost {
 	readonly pluginId: string;
-	/** Whether the service is up; null when the plugin declares no such service there. */
+	/**
+	 * Whether the service is up, starting it when it is stopped (then `starting`:
+	 * ask again shortly); null when the plugin declares no such service there.
+	 */
 	service(service: string, o?: { project?: string | null }): Promise<ServiceView | null>;
 	/**
-	 * Start the service and, once it answers, open `open` (or its own address)
+	 * Launch the service (even one Wheelhouse has stopped starting on its own) and, once it answers, open `open` (or its own address)
 	 * in a new tab. Call it from a click handler only.
 	 */
 	launch(

@@ -449,6 +449,39 @@ describe('error isolation', () => {
 describe('per-project enablement', () => {
 	const config = (c: PluginConfig) => async () => ({ config: c, error: null });
 
+	it('wants each service wherever its plugin is on, and says so only for a readable plugins file', async () => {
+		const svc = (id: string, scope: 'fleet' | 'project') => ({
+			id,
+			title: id,
+			scope,
+			resolve: async () => ({ available: false as const, reason: 'test' })
+		});
+		const docs = plugin({ id: 'docs', services: [svc('viewer', 'project'), svc('ui', 'fleet')] });
+		const off = plugin({ id: 'off', enabledByDefault: false, services: [svc('ui', 'fleet')] });
+		const none = plugin({ id: 'none' });
+		const reg = new PluginRegistry(
+			[docs, off, none],
+			host({ config: config({ plugins: { docs: { projects: { beta: false } } } }) })
+		);
+		expect(await reg.wantedServices()).toEqual({
+			refs: [
+				{ plugin: 'docs', service: 'viewer', project: 'alpha' },
+				{ plugin: 'docs', service: 'ui', project: null }
+			],
+			complete: true
+		});
+		const allOff = new PluginRegistry(
+			[docs],
+			host({ config: config({ plugins: { docs: { enabled: false } } }) })
+		);
+		expect(await allOff.wantedServices()).toEqual({ refs: [], complete: true });
+		const broken = new PluginRegistry(
+			[docs],
+			host({ config: async () => ({ config: EMPTY_CONFIG, error: 'not valid' }) })
+		);
+		expect(await broken.wantedServices()).toEqual({ refs: [], complete: false });
+	});
+
 	it('follows the project setting, then the plugin setting, then the default', async () => {
 		const on = simple('on', {});
 		const off = { ...simple('off', {}), enabledByDefault: false };

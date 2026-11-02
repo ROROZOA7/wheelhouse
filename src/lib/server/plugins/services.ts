@@ -1,15 +1,26 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, fstatSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import {
+	closeSync,
+	fstatSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	readSync,
+	renameSync,
+	writeFileSync
+} from 'node:fs';
 import path from 'node:path';
 import type { ServiceSpec, ServiceStatus } from '../../plugins/types';
 
 /**
  * Plugin companion services: a local web UI a first-party plugin declares
- * (improve's review UI, docket's viewer), which Wheelhouse checks and, only on
- * the captain's explicit click, starts. The command comes from the plugin's own
- * code, never from a repository's files; it must serve on loopback, and it runs
- * detached, so it keeps running when Wheelhouse stops. Its output goes to a log
- * in Wheelhouse's state directory.
+ * (improve's review UI, docket's viewer), which Wheelhouse checks, starts and
+ * stops. When it starts or stops one is the supervisor's call (autostart.ts);
+ * this is how. The command comes from the plugin's own code, never from a
+ * repository's files; it must serve on loopback, and it runs detached, so it
+ * keeps running when Wheelhouse stops. Its output goes to a log in Wheelhouse's
+ * state directory, beside a record of the processes Wheelhouse started, so it
+ * stops only those, even after a restart.
  */
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
@@ -19,6 +30,10 @@ const MAX_SETUP_MS = 10 * 60_000;
 const POLL_MS = 400;
 const LOG_TAIL = 2048;
 const IDENTITY_MS = 5_000;
+/** How far a process's start may be from when Wheelhouse started one, for it to be that one. */
+const SAME_PROCESS_MS = 5_000;
+const STOP_MS = 5_000;
+const STARTED_FILE = 'started.json';
 
 /** Why a spec cannot be checked or started here, or null when it can. */
 export function refuseSpec(spec: ServiceSpec): string | null {
@@ -57,6 +72,14 @@ export function launchable(spec: ServiceSpec, status: ServiceStatus): boolean {
 	return spec.binds === 'loopback' && (status.state === 'stopped' || status.state === 'failed');
 }
 
+/** What Wheelhouse sees of a process: when it started, and a signal to it. */
+export interface Processes {
+	/** When the process with this pid started (ms since the epoch), or null when none runs. */
+	startedAt(pid: number): Promise<number | null>;
+	/** A signal to the process, or with a negative pid to its process group. */
+	kill(pid: number, signal: NodeJS.Signals): void;
+}
+
 export interface ServiceHost {
 	/** Where launch logs go (Wheelhouse's state directory, never the Firstmate home). */
 	logDir: string;
@@ -64,6 +87,7 @@ export interface ServiceHost {
 	fetch?: typeof fetch;
 	spawn?: typeof spawn;
 	now?: () => number;
+	processes?: Processes;
 }
 
 interface Launch {
@@ -71,19 +95,125 @@ interface Launch {
 	child: ChildProcess | null;
 }
 
+/** A service process Wheelhouse started: its pid, and when (to tell it from a later one with that pid). */
+interface Started {
+	pid: number;
+	at: number;
+}
+
 export class ServiceManager {
 	private readonly launches = new Map<string, Launch>();
 	private readonly fetch: typeof fetch;
 	private readonly spawn: typeof spawn;
+	private readonly now: () => number;
+	private readonly processes: Processes;
 
 	constructor(private readonly host: ServiceHost) {
 		this.fetch = host.fetch ?? fetch;
 		this.spawn = host.spawn ?? spawn;
+		this.now = host.now ?? Date.now;
+		this.processes = host.processes ?? systemProcesses;
 	}
 
 	/** The key of each service still being started. */
 	starting(): string[] {
 		return [...this.launches.keys()];
+	}
+
+	/** The key of each service whose process Wheelhouse started and has not stopped. */
+	started(): string[] {
+		return Object.keys(this.records());
+	}
+
+	/** The end of the service's last launch log. */
+	log(key: string): string {
+		return tail(this.logFile(key));
+	}
+
+	/**
+	 * Stop the service, if Wheelhouse started it and that process still runs:
+	 * its whole process group, with SIGTERM and, after a few seconds, SIGKILL.
+	 * Never one Wheelhouse did not start, or a later process given the same pid.
+	 * One still starting is stopped once its start has ended. Says whether it
+	 * stopped one.
+	 */
+	async stop(key: string): Promise<boolean> {
+		await this.launches.get(key)?.done;
+		const record = this.records()[key];
+		if (!record) return false;
+		const ours = async () => {
+			const at = await this.processes.startedAt(record.pid);
+			return at !== null && Math.abs(at - record.at) <= SAME_PROCESS_MS;
+		};
+		if (!(await ours())) {
+			this.forget(key);
+			return false;
+		}
+		this.signal(record.pid, 'SIGTERM');
+		const until = this.now() + STOP_MS;
+		while (this.now() < until && (await ours())) {
+			await new Promise((r) => setTimeout(r, POLL_MS));
+		}
+		if (await ours()) this.signal(record.pid, 'SIGKILL');
+		this.forget(key);
+		return true;
+	}
+
+	private signal(pid: number, signal: NodeJS.Signals) {
+		try {
+			this.processes.kill(-pid, signal);
+		} catch {
+			try {
+				this.processes.kill(pid, signal);
+			} catch {
+				// already gone
+			}
+		}
+	}
+
+	private recordsFile() {
+		return path.join(this.host.logDir, STARTED_FILE);
+	}
+
+	private records(): Record<string, Started> {
+		try {
+			const v = JSON.parse(readFileSync(this.recordsFile(), 'utf8')) as unknown;
+			if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+			return Object.fromEntries(
+				Object.entries(v as Record<string, unknown>).filter(
+					(e): e is [string, Started] =>
+						typeof e[1] === 'object' &&
+						e[1] !== null &&
+						Number.isInteger((e[1] as Started).pid) &&
+						(e[1] as Started).pid > 0 &&
+						typeof (e[1] as Started).at === 'number'
+				)
+			);
+		} catch {
+			return {};
+		}
+	}
+
+	private writeRecords(records: Record<string, Started>) {
+		try {
+			mkdirSync(this.host.logDir, { recursive: true });
+			const tmp = `${this.recordsFile()}.${process.pid}.tmp`;
+			writeFileSync(tmp, JSON.stringify(records, null, 2), { mode: 0o600 });
+			renameSync(tmp, this.recordsFile());
+		} catch {
+			// unrecorded: Wheelhouse will not stop it, which is the safe side
+		}
+	}
+
+	private remember(key: string, pid: number) {
+		this.writeRecords({ ...this.records(), [key]: { pid, at: this.now() } });
+	}
+
+	private forget(key: string) {
+		const records = this.records();
+		if (!(key in records)) return;
+		delete records[key];
+		this.writeRecords(records);
 	}
 
 	/** Whether the service answers its health check now. */
@@ -184,6 +314,7 @@ export class ServiceManager {
 			child.on('exit', (code) => (exited = code));
 			child.on('error', () => (exited = exited ?? -1));
 			child.unref();
+			if (child.pid) this.remember(key, child.pid);
 		} catch (e) {
 			return this.failed(spec, `it could not be started: ${(e as Error).message}.`, log);
 		} finally {
@@ -195,8 +326,10 @@ export class ServiceManager {
 			const answer = await this.answers(spec);
 			if (answer === 'other') return this.other(spec);
 			if (answer === 'up') return { state: 'running', url: spec.url, reason: null };
-			if (exited !== undefined)
+			if (exited !== undefined) {
+				this.forget(key);
 				return this.failed(spec, `it stopped (exit ${exited ?? 'signal'}).`, log);
+			}
 			await new Promise((r) => setTimeout(r, POLL_MS));
 		}
 		return this.failed(spec, 'it did not answer in time; it may still be starting.', log);
@@ -280,6 +413,26 @@ export class ServiceManager {
 		if (v === undefined) return present ? 'other' : 'up';
 		return present || v === id.value ? 'up' : 'other';
 	}
+}
+
+/** Processes as `ps` reports them, and signals through `process.kill`. */
+const systemProcesses: Processes = {
+	startedAt: (pid) =>
+		new Promise((resolve) => {
+			execFile('ps', ['-o', 'etime=', '-p', String(pid)], { timeout: 5_000 }, (err, out) => {
+				const elapsed = err ? null : parseElapsed(out);
+				resolve(elapsed === null ? null : Date.now() - elapsed);
+			});
+		}),
+	kill: (pid, signal) => process.kill(pid, signal)
+};
+
+/** `ps`'s elapsed time, `[[dd-]hh:]mm:ss`, in ms; null when it is not one. */
+export function parseElapsed(text: string): number | null {
+	const m = /^\s*(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)\s*$/.exec(text);
+	if (!m) return null;
+	const [d, h, min, sec] = [m[1], m[2], m[3], m[4]].map((v) => Number(v ?? 0));
+	return (((d * 24 + h) * 60 + min) * 60 + sec) * 1000;
 }
 
 /** The end of a launch log, for the page to show when a start fails. */

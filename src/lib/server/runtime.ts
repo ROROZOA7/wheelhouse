@@ -45,6 +45,7 @@ import {
 import { PluginRegistry } from './plugins/registry';
 import { ServicePorts } from './plugins/ports';
 import { launchable, ServiceManager } from './plugins/services';
+import { serviceKey, ServiceSupervisor, type Ensure } from './plugins/autostart';
 import { AppHost } from './apps/host';
 import { Sandboxes } from './apps/sandbox';
 import { parseSlotKey, type SlotKey, type SlotQuery } from '../plugins/keys';
@@ -112,8 +113,8 @@ export type Runtime =
 			plugins: PluginRegistry;
 			/** The captain's plugins file, which the Plugins pages change. */
 			pluginsFile: PluginConfigFile;
-			/** Plugin companion services; null when the state directory cannot hold their logs. */
-			services: ServiceManager | null;
+			/** Plugin companion services, kept running where their plugin is on; null when the state directory cannot hold their logs. */
+			services: ServiceSupervisor | null;
 			/** MCP apps: the host that talks to plugins' MCP servers, and the sandbox they render in. */
 			apps: AppHost;
 			sandbox: Sandboxes;
@@ -279,8 +280,19 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		() => !!collector.getFleet().collectedAt
 	);
 	const services = serviceStateOk
-		? new ServiceManager({ logDir: path.join(serviceState, 'services'), env })
+		? new ServiceSupervisor({
+				manager: new ServiceManager({ logDir: path.join(serviceState, 'services'), env }),
+				// A project missing from a fleet not yet read, or stale, may still be there: stop nothing then.
+				wanted: async () => {
+					const w = await plugins.wantedServices();
+					const f = collector.getFleet();
+					return { ...w, complete: w.complete && !!f.collectedAt && !f.stale };
+				},
+				resolve: async (ref) =>
+					(await plugins.service(ref.plugin, ref.service, ref.project))?.resolution ?? null
+			})
 		: null;
+	services?.watch(SERVICE_WATCH_MS, () => !!collector.getFleet().collectedAt);
 	const firstmate = new FirstmateSession({
 		firstmateDir: install.firstmateDir,
 		homeDir: install.homeDir,
@@ -307,7 +319,7 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 	const sandbox = new Sandboxes();
 	const apps = new AppHost({
 		registry: plugins,
-		serviceView: (q) => serviceView(plugins, services, q),
+		serviceView: (q, how) => serviceView(plugins, services, q, how),
 		toolCall: (id) => chat.toolCall(id),
 		sandbox: (key, csp) => sandbox.url(key, csp),
 		version
@@ -364,6 +376,13 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		hosts
 	};
 }
+
+/**
+ * How often Wheelhouse starts the plugin services that should run and stops
+ * those that should not (see plugins/autostart.ts); the first pass runs once
+ * the fleet has been read, and a change on a plugin's page runs one at once.
+ */
+const SERVICE_WATCH_MS = 60_000;
 
 /** How often the issue watcher looks; the plugin's own reads are cached for two minutes. */
 const ISSUE_WATCH_MS = 60_000;
@@ -638,7 +657,7 @@ export function requestRuntime(req: IncomingMessage, res: ServerResponse): boole
 export async function busyRuntime(): Promise<string[]> {
 	const r = await g[KEY]?.runtime;
 	if (!r?.configured) return [];
-	return [...(r.services?.starting() ?? []).map((k) => `the ${k} service, still starting`)];
+	return [...(r.services?.manager.starting() ?? []).map((k) => `the ${k} service, still starting`)];
 }
 
 /**
@@ -658,6 +677,7 @@ export function shutdownRuntime(): void {
 			r.chat.stop();
 			r.sandbox.close();
 			r.gateway?.stop();
+			r.services?.close();
 		}
 	});
 	killAllRunning();
@@ -789,6 +809,7 @@ export async function changePluginConfig(
 			error: 'Wheelhouse could not save that to its plugins file, so nothing changed.'
 		};
 	}
+	void r.services?.reconcile();
 	return { ok: true, view: (await r.plugins.page(id))! };
 }
 
@@ -805,24 +826,26 @@ export async function pluginUiFile(pluginId: string, rel: string): Promise<strin
 
 /**
  * A plugin's companion service for the fleet or one project: whether it is up,
- * and whether a Launch can start it. With `launch`, starts it (only when the
- * captain asked: the route that passes it is a session-token POST) and waits
+ * and whether a Launch can start it. One that is stopped, and that Wheelhouse
+ * has not stopped starting on its own, is started (`background`: answering
+ * `starting` at once). `launch` is the captain's Launch (the route that passes
+ * it is a session-token POST): it starts it whatever happened before and waits
  * until it answers. Null when the plugin declares no such service there.
  */
 export async function pluginService(
 	q: { plugin: string; service: string; project: string | null },
-	launch = false
+	how: Ensure = 'background'
 ): Promise<ServiceView | null> {
 	const r = await getRuntime();
 	if (!r.configured) return null;
-	return serviceView(r.plugins, r.services, q, launch);
+	return serviceView(r.plugins, r.services, q, how);
 }
 
 async function serviceView(
 	plugins: PluginRegistry,
-	services: ServiceManager | null,
+	services: ServiceSupervisor | null,
 	q: { plugin: string; service: string; project: string | null },
-	launch = false
+	how: Ensure
 ): Promise<ServiceView | null> {
 	const found = await plugins.service(q.plugin, q.service, q.project);
 	if (!found) return null;
@@ -850,10 +873,7 @@ async function serviceView(
 			hint
 		};
 	}
-	const key = `${q.plugin}-${q.service}${q.project ? `-${q.project}` : ''}`;
-	const status = launch
-		? await services.launch(key, res.spec)
-		: await services.status(key, res.spec);
+	const status = await services.ensure(serviceKey(q), res.spec, how);
 	const reason = res.spec.binds !== 'loopback' && res.note ? res.note : status.reason;
 	return { ...base, ...status, reason, launchable: launchable(res.spec, status), hint };
 }

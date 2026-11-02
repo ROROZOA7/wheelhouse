@@ -109,7 +109,7 @@ export interface HostRouteContext {
 /**
  * An MCP server a plugin declares: Streamable HTTP at `path` on the address
  * of its companion `service`, so it runs where that service runs (for the
- * fleet or one project) and starts with the same Launch. Wheelhouse connects
+ * fleet or one project) and starts with it. Wheelhouse connects
  * to no other MCP server.
  */
 export interface PluginMcpServer {
@@ -125,7 +125,8 @@ export interface PluginMcpServer {
  * A companion service: a local web UI the plugin links to (improve's review
  * UI, docket's viewer). `resolve` works out, through the same context as a
  * provider, the exact command and address for the fleet or one project, or
- * why it cannot run; Wheelhouse starts it only on the captain's click.
+ * why it cannot run. Wheelhouse keeps it running wherever the plugin is on
+ * (see autostart.ts).
  */
 export interface PluginService {
 	id: string;

@@ -61,12 +61,19 @@ export interface AppHostDeps {
 			project: string | null
 		): Promise<{ title: string; resolution: ServiceResolution } | null>;
 	};
-	/** A companion service's status, as `/api/services` answers. */
-	serviceView(q: {
-		plugin: string;
-		service: string;
-		project: string | null;
-	}): Promise<ServiceView | null>;
+	/**
+	 * A companion service's status, as `/api/services` answers, after starting
+	 * it if it is stopped and may be: `wait` answers once it is up or has
+	 * failed, `background` straight away.
+	 */
+	serviceView(
+		q: {
+			plugin: string;
+			service: string;
+			project: string | null;
+		},
+		how: 'background' | 'wait'
+	): Promise<ServiceView | null>;
 	/** A Firstmate MCP tool call in the chat's transcript, by its `tool_use` id. */
 	toolCall?(id: string): ToolCall | null;
 	/** The signed sandbox page for an app of server `key` with policy `csp`, or why there is none. */
@@ -147,19 +154,23 @@ export class AppHost {
 
 	/**
 	 * Everything the page needs to draw the app: its HTML and policy, the tool
-	 * and its arguments, and the sandbox. When the server's service does not
-	 * answer, its status instead, so the page can offer Launch.
+	 * and its arguments, and the sandbox. A server whose service is stopped is
+	 * started first; when it still does not answer, its status instead, so the
+	 * page can say why and offer Launch.
 	 */
 	async open(ref: AppRef): Promise<AppOpenView | null> {
 		const target = await this.target(ref);
 		if (!target) return null;
 		const server = { id: target.server.id, title: target.server.title };
 		if (!target.args.available) return unavailable(target.args.reason);
-		const view = await this.deps.serviceView({
-			plugin: target.plugin.id,
-			service: target.server.service,
-			project: target.serviceProject
-		});
+		const view = await this.deps.serviceView(
+			{
+				plugin: target.plugin.id,
+				service: target.server.service,
+				project: target.serviceProject
+			},
+			'wait'
+		);
 		if (!view) return unavailable(`${target.plugin.name} has no such service here.`);
 		if (view.state !== 'running') {
 			return { schema: 'wheelhouse-app.v1', state: 'service', server, service: view };
@@ -319,11 +330,14 @@ export class AppHost {
 		for (const [key, { target, calls }] of groups) {
 			const server = { id: target.server.id, title: target.server.title };
 			const titles = new Map<string, string>();
-			const view = await this.deps.serviceView({
-				plugin: target.plugin.id,
-				service: target.server.service,
-				project: target.serviceProject
-			});
+			const view = await this.deps.serviceView(
+				{
+					plugin: target.plugin.id,
+					service: target.server.service,
+					project: target.serviceProject
+				},
+				'background'
+			);
 			const url = view?.state === 'running' ? endpointUrl(view.url, target.server.path) : null;
 			if (url?.ok) {
 				try {

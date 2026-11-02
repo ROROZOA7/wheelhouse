@@ -30,6 +30,8 @@ let log: string[] = [];
 let host: AppHost;
 /** Firstmate's MCP tool calls, as the chat's transcript holds them. */
 let calls: Record<string, ToolCall>;
+/** How each service view was asked for: started and waited for, or started in the background. */
+let asked: string[] = [];
 const sandboxes = new Sandboxes();
 
 beforeAll(async () => {
@@ -78,8 +80,9 @@ beforeEach(() => {
 	host = new AppHost({
 		toolCall: (id) => calls[id] ?? null,
 		registry,
-		serviceView: async (q) =>
-			({
+		serviceView: async (q, how) => {
+			asked.push(how);
+			return {
 				schema: 'wheelhouse-service.v1',
 				...q,
 				title: 'the demo MCP server',
@@ -88,7 +91,8 @@ beforeEach(() => {
 				reason: null,
 				launchable: !running,
 				hint: null
-			}) satisfies ServiceView,
+			} satisfies ServiceView;
+		},
 		sandbox: (key, csp) => sandboxes.url(key, csp),
 		version: '1.0.0',
 		log: (line) => log.push(line)
@@ -128,12 +132,14 @@ describe('the MCP app host', () => {
 		expect(log.join('\n')).toContain("connect-src 'self' https://api.example.com");
 	});
 
-	it('offers to start the server’s service when it is not running', async () => {
+	it('starts the server’s service first, and offers Launch when it still is not running', async () => {
 		running = false;
+		asked = [];
 		expect(await host.open(ref)).toMatchObject({
 			state: 'service',
 			service: { plugin: 'mcp-app-demo', service: 'mcp', launchable: true }
 		});
+		expect(asked).toEqual(['wait']);
 	});
 
 	it('runs the app’s tool with the provider’s arguments', async () => {
@@ -198,6 +204,7 @@ describe('an MCP app in the chat', () => {
 	const chat = { chat: 'c1' };
 
 	it('finds the calls to a plugin’s MCP server, with a result, whose tool has a UI', async () => {
+		asked = [];
 		expect(await host.chatApps(['c1', 'c2', 'c3', 'c4', 'c5', 'nope'])).toEqual({
 			schema: 'wheelhouse-chat-apps.v1',
 			apps: {
@@ -224,6 +231,8 @@ describe('an MCP app in the chat', () => {
 			version: '1.0.0'
 		});
 		expect((await fresh.chatApps(['c1'])).apps).toEqual({});
+		// Looking for the calls' apps starts a stopped server without waiting for it.
+		expect(asked).toEqual(['background', 'background']);
 	});
 
 	it('opens the app with the call’s own arguments, reading only its UI from the server', async () => {

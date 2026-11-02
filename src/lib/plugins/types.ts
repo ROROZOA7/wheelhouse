@@ -201,8 +201,8 @@ export interface SuggestedPlugin {
 /**
  * A plugin's companion service as resolved for one scope: the command that
  * starts it, where it serves and how to tell it is up. Declared by a
- * first-party plugin's own code; Wheelhouse checks it and starts it only when
- * the captain asks.
+ * first-party plugin's own code; Wheelhouse checks it and starts it wherever
+ * the plugin is on.
  */
 export interface ServiceSpec {
 	/** Where to open it: an http(s) address on this computer. */

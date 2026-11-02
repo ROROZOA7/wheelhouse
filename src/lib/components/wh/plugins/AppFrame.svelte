@@ -118,6 +118,8 @@
 				service = v.service;
 				serverTitle = v.server.title;
 				phase = 'service';
+				// Started elsewhere and not up yet: look again shortly.
+				if (v.service.state === 'starting') reopen = setTimeout(() => void open(), REOPEN_MS);
 			} else {
 				failure = v.reason;
 				phase = 'failed';
@@ -140,8 +142,12 @@
 		else service = v ?? service;
 	}
 
+	const REOPEN_MS = 2_000;
+	let reopen: ReturnType<typeof setTimeout> | undefined;
+
 	onMount(() => {
 		void open();
+		return () => clearTimeout(reopen);
 	});
 
 	const sandboxSrc = $derived.by(() => {
@@ -350,11 +356,17 @@
 {:else if phase === 'service' && service}
 	<div class="text-sm {fill ? 'px-4 py-10 sm:px-6' : ''}" data-app-service>
 		<p>
-			The app runs on {service.title}, which is not running.{service.reason
-				? ` ${service.reason}`
-				: ''}
+			{#if service.state === 'starting'}
+				The app runs on {service.title}, which is starting.
+			{:else}
+				The app runs on {service.title}, which is not running.{service.reason
+					? ` ${service.reason}`
+					: ''}
+			{/if}
 		</p>
-		{#if service.launchable}
+		{#if service.state === 'starting'}
+			<LoaderCircle class="mt-3 size-4 animate-spin" aria-label="Starting" />
+		{:else if service.launchable}
 			<Button class="mt-3" size="sm" disabled={starting} onclick={start}>
 				{#if starting}<LoaderCircle class="size-4 animate-spin" aria-hidden="true" />Starting…
 				{:else}<Play class="size-4" aria-hidden="true" />Start {service.title}{/if}

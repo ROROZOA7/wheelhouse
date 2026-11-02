@@ -228,6 +228,21 @@ beforeAll(async () => {
 afterAll(async () => {
 	await mcp?.close();
 	cli?.kill('SIGKILL');
+	// Any plugin service Wheelhouse started and left running, by the pids it recorded.
+	try {
+		const started = JSON.parse(
+			readFileSync(path.join(stateDir, 'services', 'started.json'), 'utf8')
+		) as Record<string, { pid: number }>;
+		for (const { pid } of Object.values(started)) {
+			try {
+				process.kill(-pid, 'SIGKILL');
+			} catch {
+				// already gone
+			}
+		}
+	} catch {
+		// none started
+	}
 	firstmateSession?.kill('SIGKILL');
 	fm?.cleanup();
 	if (stateDir) rmSync(stateDir, { recursive: true, force: true });
@@ -592,13 +607,40 @@ describe('wheelhouse open', () => {
 		expect(nav).toContain('data-slot="nav.page"');
 		expect(nav).toContain('Demo status');
 
-		// With its server down, the app offers to start the service it runs on.
+		// With its server down, opening the app starts the service it runs on, the plugin being on.
+		const port = mcp!.port;
 		await mcp!.close();
 		mcp = null;
 		expect(await (await apps('open', ref)).json()).toMatchObject({
-			state: 'service',
-			service: { plugin: 'mcp-app-demo', service: 'mcp', state: 'stopped', launchable: true }
+			state: 'ready',
+			tool: { name: 'show_status' }
 		});
+		expect(output).toContain('Services:   starting mcp-app-demo-mcp.');
+		const health = () =>
+			fetch(`http://127.0.0.1:${port}/health`)
+				.then((r) => r.ok)
+				.catch(() => false);
+		expect(await health()).toBe(true);
+
+		// Turned off, Wheelhouse stops the service it started; turned back on, it starts it again.
+		const turn = (enabled: boolean | null) =>
+			fetch(`${base}/api/plugins/mcp-app-demo/config`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', ...trusted },
+				body: JSON.stringify({ enabled })
+			});
+		expect((await turn(false)).status).toBe(200);
+		await waitFor(async () => ((await health()) ? undefined : true));
+		await waitFor(() =>
+			output.includes('Services:   stopped mcp-app-demo-mcp; its plugin is off there now.')
+				? true
+				: undefined
+		);
+		expect((await turn(null)).status).toBe(200);
+		await waitFor(async () => ((await health()) ? true : undefined));
+		expect((await turn(false)).status).toBe(200);
+		await waitFor(async () => ((await health()) ? undefined : true));
+		expect((await turn(null)).status).toBe(200);
 	});
 
 	it('shows the vault by name through the bundled wh-vault, never a value', async () => {
