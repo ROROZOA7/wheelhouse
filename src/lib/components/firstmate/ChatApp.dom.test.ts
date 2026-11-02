@@ -43,25 +43,16 @@ const settle = async () => {
 	}
 };
 
+const SEARCH = { plugin: 'docket', server: { id: 'docket', title: 'Docket' }, title: 'Search' };
+
 describe('an MCP app in the chat', () => {
-	it('is a closed card until the captain opens it, then draws the app for that tool call', async () => {
-		const c = mount(ChatApp, {
-			target: document.body,
-			props: {
-				id: 'toolu_1',
-				app: { plugin: 'docket', server: { id: 'docket', title: 'Docket' }, title: 'Search' }
-			}
-		});
+	it('opens expanded, drawing the app for that tool call, and collapses to a card', async () => {
+		const c = mount(ChatApp, { target: document.body, props: { id: 'toolu_1', app: SEARCH } });
 		await settle();
 		const button = document.querySelector<HTMLButtonElement>('[data-chat-app] button')!;
 		expect(button.textContent).toContain('Search');
 		expect(button.textContent).toContain('an app from Docket');
-		expect(button.getAttribute('aria-expanded')).toBe('false');
-		expect(document.querySelector('iframe')).toBeNull();
-		expect(calls).toEqual([]);
-
-		button.click();
-		await settle();
+		expect(button.textContent).toContain('Collapse');
 		expect(button.getAttribute('aria-expanded')).toBe('true');
 		expect(calls[0]).toEqual({ url: '/api/apps/open', body: { chat: 'toolu_1' } });
 		const frame = document.querySelector('iframe')!;
@@ -69,10 +60,30 @@ describe('an MCP app in the chat', () => {
 		expect(frame.title).toBe('Search: an app from Docket');
 		expect(document.querySelector('[data-app]')?.getAttribute('data-app')).toBe('chat/toolu_1');
 
-		// Closing it takes the app down.
+		// Collapsing it takes the app down; expanding draws it again.
 		button.click();
 		await settle();
+		expect(button.getAttribute('aria-expanded')).toBe('false');
+		expect(button.textContent).toContain('Expand');
 		expect(document.querySelector('iframe')).toBeNull();
+
+		button.click();
+		await settle();
+		expect(button.getAttribute('aria-expanded')).toBe('true');
+		expect(document.querySelector('iframe')).not.toBeNull();
+		unmount(c);
+	});
+
+	it('stays a closed card, drawing nothing, when the chat says it was collapsed', async () => {
+		const c = mount(ChatApp, {
+			target: document.body,
+			props: { id: 'toolu_1', app: SEARCH, open: false }
+		});
+		await settle();
+		const button = document.querySelector<HTMLButtonElement>('[data-chat-app] button')!;
+		expect(button.getAttribute('aria-expanded')).toBe('false');
+		expect(document.querySelector('iframe')).toBeNull();
+		expect(calls).toEqual([]);
 		unmount(c);
 	});
 });
