@@ -4,6 +4,7 @@
 	import { ago } from '$lib/format';
 	import { frameSandbox, type PreviewCheck } from '$lib/preview';
 	import { ExternalLink, Maximize2, MonitorOff, RotateCw } from '@lucide/svelte';
+	import PreviewActions from './plugins/PreviewActions.svelte';
 	import PreviewFeedback from './PreviewFeedback.svelte';
 
 	/**
@@ -17,7 +18,9 @@
 	 * `onfullscreen` adds a Full screen button to the toolbar. `onopen` makes a
 	 * compact preview a picture of the page (it takes no clicks or scrolling)
 	 * that opens it when clicked, and `toolbar={false}` leaves the address row
-	 * out, for a card that draws its own (the chat's preview cards).
+	 * out, for a card that draws its own (the chat's preview cards). Plugins'
+	 * preview actions sit in the toolbar, before Full screen, unless
+	 * `actions={false}` (the full-screen view draws them in its own header).
 	 */
 	let {
 		taskId,
@@ -25,6 +28,7 @@
 		fill = false,
 		feedback = true,
 		toolbar = true,
+		actions = true,
 		onfullscreen,
 		onopen
 	}: {
@@ -33,6 +37,7 @@
 		fill?: boolean;
 		feedback?: boolean;
 		toolbar?: boolean;
+		actions?: boolean;
 		onfullscreen?: () => void;
 		onopen?: () => void;
 	} = $props();
@@ -98,6 +103,7 @@
 					>Open in new tab<ExternalLink class="size-3.5" aria-hidden="true" /></a
 				>
 			{/if}
+			{#if actions && url}<PreviewActions {taskId} />{/if}
 			{#if onfullscreen && check?.state === 'live'}
 				<button
 					type="button"

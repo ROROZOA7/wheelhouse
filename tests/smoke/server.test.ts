@@ -70,7 +70,8 @@ beforeAll(async () => {
 		JSON.stringify({
 			plugins: {
 				'project-links': { projects: { wheelhouse: true } },
-				'mcp-app-demo': { settings: { port: mcp.port } }
+				'mcp-app-demo': { settings: { port: mcp.port } },
+				'preview-actions-demo': { enabled: true }
 			}
 		})
 	);
@@ -82,6 +83,12 @@ beforeAll(async () => {
 	cpSync(path.resolve('tests/fixtures/host-route-demo'), path.join(pluginsDir, 'host-route-demo'), {
 		recursive: true
 	});
+	// The example preview action plugin, installed the same way and turned on in plugins.json.
+	cpSync(
+		path.resolve('tests/fixtures/preview-actions-demo'),
+		path.join(pluginsDir, 'preview-actions-demo'),
+		{ recursive: true }
+	);
 	writeFileSync(
 		path.join(pluginsDir, 'installed.json'),
 		JSON.stringify({
@@ -101,6 +108,14 @@ beforeAll(async () => {
 					commit: '89abcdef0123456789abcdef0123456789abcdef',
 					version: '0.1.0',
 					installedAt: '2026-10-31T00:00:00Z',
+					enabled: true
+				},
+				'preview-actions-demo': {
+					repository: 'chrisjowen/preview-actions-demo',
+					ref: null,
+					commit: 'fedcba9876543210fedcba9876543210fedcba98',
+					version: '0.1.0',
+					installedAt: '2026-11-02T00:00:00Z',
 					enabled: true
 				}
 			}
@@ -434,10 +449,21 @@ describe('wheelhouse open', () => {
 				state: 'loaded',
 				source: 'installed',
 				repository: 'chrisjowen/mcp-app-demo'
+			}),
+			expect.objectContaining({
+				id: 'preview-actions-demo',
+				state: 'loaded',
+				source: 'installed',
+				slots: ['preview.actions']
 			})
 		]);
 		// The home has no improve to suggest.
-		expect(plugins.enabled.wheelhouse).toEqual(['project-links', 'vault', 'mcp-app-demo']);
+		expect(plugins.enabled.wheelhouse).toEqual([
+			'project-links',
+			'vault',
+			'mcp-app-demo',
+			'preview-actions-demo'
+		]);
 		expect(plugins.suggested).toEqual([]);
 		// Once the home uses improve, the Plugins page and its Improvements page say how to install it.
 		const improveJson = path.join(fm.root, '.harness', 'improve.json');
@@ -474,6 +500,21 @@ describe('wheelhouse open', () => {
 		expect(tab.status).toBe(200);
 		expect(await tab.text()).toContain('data-slot="project.tab"');
 		expect((await fetch(`${base}/api/slots?task=a&project=b`)).status).toBe(400);
+	});
+
+	it('narrows a task’s plugin entries to its preview actions', async () => {
+		// The example preview action: hidden quietly, since wh-1 has reported no preview.
+		const all = await (await fetch(`${base}/api/slots?task=wh-1`)).json();
+		expect(all.entries.map((e: { slot: string }) => e.slot)).toContain('task.section');
+		const actions = await (await fetch(`${base}/api/slots?task=wh-1&slot=preview.actions`)).json();
+		expect(actions).toEqual({ schema: 'wheelhouse-slots.v1', entries: [] });
+		const bundle = await fetch(`${base}/api/plugins/preview-actions-demo/ui/index.js`);
+		expect(bundle.status).toBe(200);
+		expect(await bundle.text()).toContain("customElements.define('preview-actions-demo-copy'");
+		expect((await fetch(`${base}/api/slots?task=wh-1&slot=nope`)).status).toBe(400);
+		expect((await fetch(`${base}/api/slots?project=wheelhouse&slot=preview.actions`)).status).toBe(
+			400
+		);
 	});
 
 	it('hosts a plugin’s MCP app: its server over HTTP, its UI from a sandbox on another origin', async () => {

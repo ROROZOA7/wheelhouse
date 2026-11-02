@@ -5,6 +5,7 @@
 	import type { MessagesView } from '$lib/types';
 	import { MessageSquare, PanelRightClose, X } from '@lucide/svelte';
 	import LivePreview from './LivePreview.svelte';
+	import PreviewActions from './plugins/PreviewActions.svelte';
 	import PreviewFeedback from './PreviewFeedback.svelte';
 
 	/**
@@ -16,7 +17,8 @@
 	 * The thread sits beside the page rather than floating over it: a panel over
 	 * the page hides the very part being commented on and reads as one more
 	 * layer, while a docked panel never covers the page and folds away to give
-	 * it the full width.
+	 * it the full width. Plugins' preview actions sit in the header, before
+	 * Close, rather than in the preview's own toolbar.
 	 */
 	let {
 		taskId,
@@ -108,6 +110,7 @@
 				>
 			{/if}
 		{/if}
+		<span class="flex items-center gap-1 text-xs"><PreviewActions {taskId} /></span>
 		<button
 			type="button"
 			class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:bg-accent"
@@ -119,7 +122,7 @@
 
 	<div class="relative flex min-h-0 flex-1">
 		<div class="min-w-0 flex-1 p-3">
-			<LivePreview {taskId} fill feedback={false} />
+			<LivePreview {taskId} fill feedback={false} actions={false} />
 		</div>
 
 		{#if feedback && panel}

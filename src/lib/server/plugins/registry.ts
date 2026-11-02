@@ -169,6 +169,9 @@ export function checkManifest(p: WheelhousePlugin, taken: ReadonlySet<string>): 
 		if (c.slot === 'header.indicator' && ('blocks' in c.render || 'app' in c.render)) {
 			return `contribution "${c.id}": header indicators render through a panel or an element only.`;
 		}
+		if (c.slot === 'preview.actions' && 'app' in c.render) {
+			return `contribution "${c.id}": preview actions render through blocks, a panel or an element, not an MCP app.`;
+		}
 		if (c.opensPullRequest !== undefined) {
 			if (c.slot !== 'project.tab') {
 				return `contribution "${c.id}" opens a pull request, which only a project.tab can.`;
@@ -403,7 +406,10 @@ export class PluginRegistry {
 		};
 	}
 
-	/** Every enabled contribution for the slots about this fleet, project or task, filled. */
+	/**
+	 * Every enabled contribution for the slots about this fleet, project or task,
+	 * filled; for a task, only one slot's when the query names it.
+	 */
 	async slots(q: SlotQuery): Promise<SlotView> {
 		const where = await this.where(q);
 		if (!where) return { schema: 'wheelhouse-slots.v1', entries: [] };
@@ -413,6 +419,7 @@ export class PluginRegistry {
 			if (!scope) continue;
 			for (const c of plugin.contributions) {
 				if (SLOT_SCOPE[c.slot] !== q.scope) continue;
+				if (q.scope === 'task' && q.slot && c.slot !== q.slot) continue;
 				const provider = plugin.providers.find((p) => p.id === c.provider)!;
 				jobs.push(this.fill(plugin, c, provider, scope));
 			}

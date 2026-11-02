@@ -12,6 +12,7 @@ Plugins are "panels and providers". A provider reads data on the server; a contr
 | `home.card`        | the fleet | a tab of its own on the home page's rail, after Under way, Needs you and Landed, named by its title and counted by its `badge`       |
 | `header.indicator` | the fleet | a small pill in the header on every page, drawn by the plugin's own panel or element only; it shows nothing when it renders nothing  |
 | `nav.page`         | the fleet | its own page at `/plugins/<plugin>/<page>`, a top-level item in the left-hand menu after Logbook                                     |
+| `preview.actions`  | a task    | small actions beside the task's live preview, wherever it shows (see [Preview actions](#preview-actions))                            |
 
 **Isolation.** Each provider call runs with a timeout (3 s by default, at most 10 s) and its result is cached for the provider's `ttlMs` (a failure for at most 15 s); after that, the last good result is served, for up to 10 minutes, while one refresh runs. A provider that throws, times out or returns something malformed becomes "Not available" with the reason, in its own entry only; the rest of the page and every other plugin render as usual. A plugin's own panel mounts in the browser inside an error boundary, so a panel that throws is contained too; an installed plugin whose element's bundle fails to load says so in its own place. An installed plugin that cannot be read, is invalid or throws while it loads is listed as failed, with the reason, and the rest load as usual. Providers see copies of the fleet and read only through their context: `readFile` and `listDir` confined to the project clone, the task worktree or the Firstmate home (at most 64 KiB), `exec` in one of those with an argument array, no shell, a minimal environment and bounded time and output (at most 8 MiB), `changedFiles` for the files a task in scope changed against its base branch, `loopbackAddresses` for the addresses on this computer Wheelhouse has shown, and `reservedPorts` for Wheelhouse's own ports (see [Host routes and address rewrites](#host-routes-and-address-rewrites)). There is no way to write, message Firstmate or control workers (an MCP app can only ask to send Firstmate a message, which the captain reads and agrees to first; see [MCP apps](#mcp-apps)); the one thing Wheelhouse starts for a plugin is its declared companion service, on the captain's click (see [Companion services](#companion-services)), and the one place a plugin serves anything is a host route it declares. Commands run with your permissions: read-only is the plugin's contract, reviewed in Wheelhouse's own pull requests, not a sandbox.
 
@@ -82,7 +83,7 @@ A plugin can declare the local web UI its pages link to as a companion service (
 
 ## MCP apps
 
-A plugin can draw an [MCP app](https://modelcontextprotocol.io/extensions/apps) (the `io.modelcontextprotocol/ui` extension, stable spec 2026-01-26) in any slot but the header and Bridge cards, and under a Firstmate tool call in the chat (see [MCP apps in the chat](#mcp-apps-in-the-chat)): the HTML UI an MCP server offers for one of its tools, the same UI Claude Desktop or ChatGPT draws in a conversation. Wheelhouse is the app's host, with its own MCP client. It connects only to MCP servers that plugins declare, each reached over HTTP on one of the plugin's own companion services, so the server starts with the same **Launch**, on the captain's click, and needs no other consent. It does not reach the captain's Claude Code MCP servers, servers on other computers, servers that need signing in, or servers over stdio.
+A plugin can draw an [MCP app](https://modelcontextprotocol.io/extensions/apps) (the `io.modelcontextprotocol/ui` extension, stable spec 2026-01-26) in any slot but the header, Bridge cards and preview actions, and under a Firstmate tool call in the chat (see [MCP apps in the chat](#mcp-apps-in-the-chat)): the HTML UI an MCP server offers for one of its tools, the same UI Claude Desktop or ChatGPT draws in a conversation. Wheelhouse is the app's host, with its own MCP client. It connects only to MCP servers that plugins declare, each reached over HTTP on one of the plugin's own companion services, so the server starts with the same **Launch**, on the captain's click, and needs no other consent. It does not reach the captain's Claude Code MCP servers, servers on other computers, servers that need signing in, or servers over stdio.
 
 ```js
 export default {
@@ -191,6 +192,35 @@ A route that throws answers 500, and Wheelhouse logs which plugin it was. A host
 
 [`tests/fixtures/host-route-demo/`](../tests/fixtures/host-route-demo/) is a complete example in the installed-plugin format: an address rewrite, and a host route that answers with what it was asked and echoes WebSocket messages. Wheelhouse's tests load it.
 
+## Preview actions
+
+A `preview.actions` contribution puts a small action beside a task's live preview, such as a button that shares it. Wheelhouse draws each entry inline, as a small item in the row the preview already has, wherever the task's preview is shown and only while the task has one:
+
+| Where                                                             | In the row                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------- |
+| the task's **Preview** tab, and a Harbour card's expanded preview | the toolbar, after Open in new tab and before Full screen |
+| a live preview card in the Firstmate chat                         | the footer's right-hand group, before Full size           |
+| the full-screen preview                                           | the header, before Close                                  |
+
+The slot is about a task, so the provider is called for the task whose preview it is; the entry has `taskId` set, and an element gets the usual `host`, `entry` and `data` (the provider's value). Draw it with an element, a panel or blocks (a `links.v1` block, say), not an MCP app. With `when: 'provider-available'` an entry is hidden quietly while its provider has nothing to show (a task the plugin has nothing to do for); otherwise one whose provider fails shows its title as not available, with the reason on hover. Pages load only this slot's entries for a preview (`GET /api/slots?task=<id>&slot=preview.actions`), when the preview is first drawn, and refresh them as the fleet changes.
+
+Each item sits above the preview below its row, and nothing around it clips, so an element can open a small popover or panel below itself: give the element `position: relative` and the popover `position: absolute; top: 100%`. Wheelhouse only draws the actions: it never changes the embedded preview, which stays the local one the worker reported. An action that does something (starts a share, stops one) calls the plugin's own companion service, whose address `host.service(id)` gives (see [The host API](#the-host-api)).
+
+```js
+contributions: [
+	{
+		slot: 'preview.actions',
+		id: 'copy',
+		title: 'Copy link',
+		provider: 'link', // scope: 'task'; returns { taskId, url } from ctx.task.preview
+		when: 'provider-available',
+		render: { element: 'preview-actions-demo-copy' }
+	}
+];
+```
+
+[`tests/fixtures/preview-actions-demo/`](../tests/fixtures/preview-actions-demo/) is a complete example in the installed-plugin format: a Copy link button that opens a popover with the preview's address. Wheelhouse's tests load it.
+
 ## Pull request review tabs
 
 Wheelhouse has no PR review of its own: a plugin's project tab can review pull requests, and every **Review** link on one opens that tab. A `project.tab` contribution says it opens one pull request with `opensPullRequest`, the query its address takes, `{url}` standing for the pull request's address:
@@ -275,7 +305,7 @@ Any other field is refused. The SDK's [`plugin.schema.json`](../packages/plugin-
 
 ### Custom elements
 
-A contribution with `render: { element: 'project-links-summary' }` is drawn by that custom element, which the plugin's UI bundle defines with `customElements.define`. The tag must start with the plugin's id and a dash. Wheelhouse serves the bundle, and any file beside it (split chunks, a stylesheet, images), from `/api/plugins/<id>/ui/<file>`, only from the directory of the manifest's `ui` entry. When the entry first shows, the page imports the bundle, waits up to 5 s for the tag to be defined, creates the element in the slot and sets three properties: `host`, the [host API](#the-host-api), first; `entry`, the slot entry (`key`, `slot`, `pluginId`, `contributionId`, `title`, `projectId`); and `data`, the provider's value (plain JSON). When the provider's value changes, Wheelhouse sets `data` on the same element again, so a setter can re-render. A bundle that fails to load, or never defines the tag, shows "Not available" with the reason in that place (in the header, nothing).
+A contribution with `render: { element: 'project-links-summary' }` is drawn by that custom element, which the plugin's UI bundle defines with `customElements.define`. The tag must start with the plugin's id and a dash. Wheelhouse serves the bundle, and any file beside it (split chunks, a stylesheet, images), from `/api/plugins/<id>/ui/<file>`, only from the directory of the manifest's `ui` entry. When the entry first shows, the page imports the bundle, waits up to 5 s for the tag to be defined, creates the element in the slot and sets three properties: `host`, the [host API](#the-host-api), first; `entry`, the slot entry (`key`, `slot`, `pluginId`, `contributionId`, `title`, `projectId`, and in a task slot `taskId`); and `data`, the provider's value (plain JSON). When the provider's value changes, Wheelhouse sets `data` on the same element again, so a setter can re-render. A bundle that fails to load, or never defines the tag, shows "Not available" with the reason in that place (in the header, nothing).
 
 The element sits in the page itself, in light DOM or its own shadow root, and Wheelhouse's CSS variables reach it either way. Use them so it follows the light and dark themes; for example `color: var(--foreground)` and `a { color: var(--sea) }`:
 

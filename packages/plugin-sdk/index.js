@@ -17,7 +17,8 @@ export const SLOTS = Object.freeze([
 	'bridge.card',
 	'home.card',
 	'header.indicator',
-	'nav.page'
+	'nav.page',
+	'preview.actions'
 ]);
 
 /** Returns the plugin unchanged; it only gives an editor the types. */

@@ -15,6 +15,7 @@
 	import { pullRequests } from '$lib/client/pullrequests';
 	import LivePreview from '$lib/components/wh/LivePreview.svelte';
 	import PreviewStudio from '$lib/components/wh/PreviewStudio.svelte';
+	import PreviewActions from '$lib/components/wh/plugins/PreviewActions.svelte';
 
 	/**
 	 * A task's live preview under the Firstmate reply about it: the page,
@@ -22,7 +23,9 @@
 	 * that opens full size (with the feedback thread, while the work has not
 	 * landed), and the pull request and its checks underneath. Landed work says
 	 * so. The server checks the preview is on this machine and answering before
-	 * a frame is drawn (LivePreview), and says plainly when it is not.
+	 * a frame is drawn (LivePreview), and says plainly when it is not. Plugins'
+	 * preview actions sit in the footer, before Full size; the card does not
+	 * clip, so one can open a small popover below it.
 	 */
 	let {
 		preview,
@@ -48,7 +51,7 @@
 </script>
 
 <div
-	class="w-full max-w-[min(100%,40rem)] overflow-hidden rounded-xl border border-hair bg-card"
+	class="w-full max-w-[min(100%,40rem)] overflow-visible rounded-xl border border-hair bg-card"
 	data-chat-preview={preview.landed ? 'landed' : 'live'}
 >
 	<header class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-2.5 pb-2 text-sm">
@@ -88,7 +91,7 @@
 		/>
 	</div>
 
-	<footer class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
+	<footer class="flex flex-wrap items-center gap-x-3 gap-y-1 overflow-visible px-4 py-2 text-xs">
 		{#if task.pr}
 			<a
 				href={task.pr.url}
@@ -118,6 +121,7 @@
 					data-review-pr><Compass class="size-3.5" aria-hidden="true" />Review</a
 				>
 			{/if}
+			{#if url}<PreviewActions taskId={task.id} />{/if}
 			<button
 				type="button"
 				class="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-accent"

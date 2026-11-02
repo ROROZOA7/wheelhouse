@@ -16,7 +16,8 @@ export const SLOTS = [
 	'bridge.card',
 	'home.card',
 	'header.indicator',
-	'nav.page'
+	'nav.page',
+	'preview.actions'
 ] as const;
 
 export type Slot = (typeof SLOTS)[number];
@@ -32,7 +33,8 @@ export const SLOT_SCOPE: Record<Slot, Scope> = {
 	'bridge.card': 'fleet',
 	'home.card': 'fleet',
 	'header.indicator': 'fleet',
-	'nav.page': 'fleet'
+	'nav.page': 'fleet',
+	'preview.actions': 'task'
 };
 
 export type Tone = 'ok' | 'warn' | 'fail' | 'pending' | 'unknown';

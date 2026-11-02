@@ -1,0 +1,15 @@
+{
+	"$schema": "../../../../packages/plugin-sdk/plugin.schema.json",
+	"name": "preview-actions-demo",
+	"displayName": "Preview actions demo",
+	"version": "0.1.0",
+	"description": "An example preview action: a Copy link button beside a task's live preview that opens a small popover with the preview's address.",
+	"license": "MIT",
+	"wheelhouse": {
+		"apiVersion": 1,
+		"server": "wheelhouse/server/index.js",
+		"ui": "wheelhouse/ui/index.js",
+		"enabledByDefault": false,
+		"contributions": [{ "id": "copy", "slot": "preview.actions" }]
+	}
+}

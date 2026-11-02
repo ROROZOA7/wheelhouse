@@ -18,7 +18,8 @@ export type Slot =
 	| 'bridge.card'
 	| 'home.card'
 	| 'header.indicator'
-	| 'nav.page';
+	| 'nav.page'
+	| 'preview.actions';
 
 /** What a provider's call is about: the whole fleet, one project, or one task. */
 export type Scope = 'fleet' | 'project' | 'task';
@@ -245,6 +246,8 @@ export interface SlotEntry {
 	contributionId: string;
 	title: string;
 	projectId: string | null;
+	/** The task a task slot's entry (task.section, step.evidence, preview.actions) is about. */
+	taskId?: string | null;
 }
 
 /** A companion service as the page sees it (`GET /api/services`). */

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project, TaskSummary } from '../../types';
-import type { BridgeCard, SlotEntry } from '../../plugins/types';
+import type { BridgeCard, Render, SlotEntry } from '../../plugins/types';
 import { EMPTY_CONFIG, type PluginConfig } from './config';
 import {
 	checkManifest,
@@ -229,6 +229,95 @@ describe('filling slots', () => {
 			['step.evidence', 500, 'pr']
 		]);
 		expect(t.entries[0].content).toMatchObject({ value: text('b-1 in beta') });
+	});
+
+	it('fills a task’s preview actions, alone when the query names that slot', async () => {
+		const fetched: string[] = [];
+		const p = plugin({
+			id: 'share',
+			providers: [
+				{
+					id: 'link',
+					scope: 'task',
+					ttlMs: 1000,
+					fetch: async (c) => {
+						fetched.push('link');
+						return c.task!.id === 'a-1' ? ok({ url: null }) : { available: false, reason: 'off' };
+					}
+				},
+				{
+					id: 'notes',
+					scope: 'task',
+					ttlMs: 1000,
+					fetch: async () => {
+						fetched.push('notes');
+						return ok(text('notes'));
+					}
+				}
+			],
+			contributions: [
+				{
+					slot: 'preview.actions',
+					id: 'share',
+					title: 'Share',
+					provider: 'link',
+					when: 'provider-available',
+					render: { element: 'share-button' }
+				},
+				{
+					slot: 'task.section',
+					id: 'notes',
+					title: 'Notes',
+					provider: 'notes',
+					render: { blocks: true }
+				}
+			]
+		});
+		const reg = new PluginRegistry([p], host());
+		const only = await reg.slots({ scope: 'task', taskId: 'a-1', slot: 'preview.actions' });
+		expect(only.entries).toEqual([
+			expect.objectContaining({
+				key: 'share/share',
+				slot: 'preview.actions',
+				taskId: 'a-1',
+				projectId: 'alpha',
+				render: { element: 'share-button' },
+				content: expect.objectContaining({ available: true, value: { url: null } })
+			})
+		]);
+		// Only that slot's providers run.
+		expect(fetched).toEqual(['link']);
+		const all = await reg.slots({ scope: 'task', taskId: 'a-1' });
+		expect(all.entries.map((e) => e.slot).sort()).toEqual(['preview.actions', 'task.section']);
+		// Hidden quietly while its provider has nothing to show.
+		const quiet = await reg.slots({ scope: 'task', taskId: 'b-1', slot: 'preview.actions' });
+		expect(quiet.entries).toEqual([]);
+	});
+
+	it('draws preview actions with blocks, a panel or an element, never an MCP app', () => {
+		const p = (render: Render) =>
+			plugin({
+				id: 'share',
+				providers: [{ id: 'link', scope: 'task', ttlMs: 1, fetch: async () => ok({}) }],
+				contributions: [
+					{ slot: 'preview.actions', id: 'share', title: 'Share', provider: 'link', render }
+				],
+				services: [
+					{
+						id: 'mcp',
+						title: 'MCP',
+						scope: 'project',
+						resolve: async () => ({ available: false as const, reason: 'off' })
+					}
+				],
+				mcpServers: [{ id: 'demo', title: 'Demo', service: 'mcp', path: '/mcp' }]
+			});
+		expect(checkManifest(p({ element: 'share-button' }), new Set())).toBeNull();
+		expect(checkManifest(p({ component: 'share/button' }), new Set())).toBeNull();
+		expect(checkManifest(p({ blocks: true }), new Set())).toBeNull();
+		expect(checkManifest(p({ app: { server: 'demo', tool: 'show' } }), new Set())).toContain(
+			'preview actions render through blocks, a panel or an element, not an MCP app'
+		);
 	});
 
 	it('returns nothing for an unknown project or task', async () => {
