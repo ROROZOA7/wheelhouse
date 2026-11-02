@@ -406,10 +406,7 @@ export class PluginRegistry {
 		};
 	}
 
-	/**
-	 * Every enabled contribution for the slots about this fleet, project or task,
-	 * filled; for a task, only one slot's when the query names it.
-	 */
+	/** Every enabled contribution for the slots about this fleet, project or task, filled. */
 	async slots(q: SlotQuery): Promise<SlotView> {
 		const where = await this.where(q);
 		if (!where) return { schema: 'wheelhouse-slots.v1', entries: [] };
@@ -419,7 +416,6 @@ export class PluginRegistry {
 			if (!scope) continue;
 			for (const c of plugin.contributions) {
 				if (SLOT_SCOPE[c.slot] !== q.scope) continue;
-				if (q.scope === 'task' && q.slot && c.slot !== q.slot) continue;
 				const provider = plugin.providers.find((p) => p.id === c.provider)!;
 				jobs.push(this.fill(plugin, c, provider, scope));
 			}

@@ -502,19 +502,15 @@ describe('wheelhouse open', () => {
 		expect((await fetch(`${base}/api/slots?task=a&project=b`)).status).toBe(400);
 	});
 
-	it('narrows a task’s plugin entries to its preview actions', async () => {
-		// The example preview action: hidden quietly, since wh-1 has reported no preview.
+	it('serves the example preview action, hidden for a task without a preview', async () => {
+		// Hidden quietly, since wh-1 has reported no preview.
 		const all = await (await fetch(`${base}/api/slots?task=wh-1`)).json();
-		expect(all.entries.map((e: { slot: string }) => e.slot)).toContain('task.section');
-		const actions = await (await fetch(`${base}/api/slots?task=wh-1&slot=preview.actions`)).json();
-		expect(actions).toEqual({ schema: 'wheelhouse-slots.v1', entries: [] });
+		const slots = all.entries.map((e: { slot: string }) => e.slot);
+		expect(slots).toContain('task.section');
+		expect(slots).not.toContain('preview.actions');
 		const bundle = await fetch(`${base}/api/plugins/preview-actions-demo/ui/index.js`);
 		expect(bundle.status).toBe(200);
 		expect(await bundle.text()).toContain("customElements.define('preview-actions-demo-copy'");
-		expect((await fetch(`${base}/api/slots?task=wh-1&slot=nope`)).status).toBe(400);
-		expect((await fetch(`${base}/api/slots?project=wheelhouse&slot=preview.actions`)).status).toBe(
-			400
-		);
 	});
 
 	it('hosts a plugin’s MCP app: its server over HTTP, its UI from a sandbox on another origin', async () => {

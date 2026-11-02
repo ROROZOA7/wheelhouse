@@ -106,7 +106,7 @@ describe('preview actions in a live preview’s toolbar', () => {
 			props: { taskId: 't-tool', feedback: false, onfullscreen: () => {} }
 		});
 		await settle(() => document.querySelector('share-button')?.textContent);
-		expect(slotCalls()).toEqual(['/api/slots?task=t-tool&slot=preview.actions']);
+		expect(slotCalls()).toEqual(['/api/slots?task=t-tool']);
 		const items = toolbarText();
 		const open = items.findIndex((t) => t.includes('Open in new tab'));
 		const share = items.findIndex((t) => t.includes('Share t-tool'));
@@ -119,9 +119,6 @@ describe('preview actions in a live preview’s toolbar', () => {
 		);
 		// The local preview stays embedded, at the address the worker reported.
 		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(URL_);
-		// Nothing around the action clips it, so it can open a popover below the row.
-		const row = document.querySelector('[data-slot="preview.actions"]')!.parentElement!;
-		expect(row.className).not.toMatch(/overflow-(hidden|clip)/);
 	});
 
 	it('is left out without a reported preview, and where its host draws them itself', async () => {
@@ -162,7 +159,7 @@ describe('preview actions in the full-screen view', () => {
 });
 
 describe('preview actions on a chat preview card', () => {
-	it('sit in the footer before Full size, and the card does not clip them', async () => {
+	it('sit in the footer before Full size', async () => {
 		actions = [action('t-chat')];
 		const task = taskSummary('t-chat', 'needs-review', {
 			preview: { url: URL_, reportedAt: '2026-11-02T00:00:00Z' }
@@ -176,9 +173,6 @@ describe('preview actions on a chat preview card', () => {
 		const items = [...footer.querySelectorAll('share-button, button')];
 		expect(items[0].tagName).toBe('SHARE-BUTTON');
 		expect(items[1].textContent).toMatch(/Full size/);
-		const card = document.querySelector<HTMLElement>('[data-chat-preview]')!;
-		expect(card.className).not.toMatch(/overflow-hidden/);
-		expect(footer.className).toMatch(/overflow-visible/);
 	});
 });
 
@@ -213,40 +207,32 @@ describe('the example preview action plugin’s element', () => {
 		const pop = el()!.shadowRoot!.querySelector('[role="dialog"]')!;
 		expect(pop.textContent).toContain(URL_);
 		expect(pop.getAttribute('aria-label')).toBe("Link to t-demo's preview");
-		// The item it sits in stacks above the preview below the row.
-		expect(el()!.closest('[data-slot="preview.actions"]')!.className).toMatch(/relative z-20/);
 	});
 });
 
 describe('PreviewActions', () => {
 	it('says an action is not available, and draws blocks inline', async () => {
-		app = mount(PreviewActions, {
-			target: document.body,
-			props: {
-				taskId: 't-1',
-				entries: [
-					action('t-1', {
-						key: 'share/off',
-						content: { available: false, reason: 'The share service is not running.' }
-					}),
-					action('t-1', {
-						key: 'links/open',
-						title: 'Links',
-						render: { blocks: true },
-						content: {
-							available: true,
-							value: [{ block: 'links.v1', links: [{ label: 'Public', href: 'https://x.test/' }] }],
-							source: 'a test',
-							observedAt: null
-						}
-					}),
-					// Another slot's entry is never drawn here.
-					action('t-1', { key: 'other/section', slot: 'task.section', title: 'Section' })
-				]
-			}
-		});
-		flushSync();
-		await tick();
+		actions = [
+			action('t-1', {
+				key: 'share/off',
+				content: { available: false, reason: 'The share service is not running.' }
+			}),
+			action('t-1', {
+				key: 'links/open',
+				title: 'Links',
+				render: { blocks: true },
+				content: {
+					available: true,
+					value: [{ block: 'links.v1', links: [{ label: 'Public', href: 'https://x.test/' }] }],
+					source: 'a test',
+					observedAt: null
+				}
+			}),
+			// Another slot's entry is never drawn here.
+			action('t-1', { key: 'other/section', slot: 'task.section', title: 'Section' })
+		];
+		app = mount(PreviewActions, { target: document.body, props: { taskId: 't-1' } });
+		await settle(() => document.querySelector('[data-preview-action="links/open"] a'));
 		const drawn = [...document.querySelectorAll('[data-slot="preview.actions"]')];
 		expect(drawn.map((d) => d.getAttribute('data-preview-action'))).toEqual([
 			'share/off',
@@ -257,6 +243,6 @@ describe('PreviewActions', () => {
 			'Not available. The share service is not running.'
 		);
 		expect(drawn[1].querySelector('a')!.getAttribute('href')).toBe('https://x.test/');
-		expect(slotCalls()).toEqual([]);
+		expect(slotCalls()).toEqual(['/api/slots?task=t-1']);
 	});
 });

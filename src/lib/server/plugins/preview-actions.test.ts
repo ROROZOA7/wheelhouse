@@ -68,8 +68,11 @@ describe('the example preview action plugin', () => {
 	});
 
 	it('gives the element the task and its preview, and hides it without a preview', async () => {
-		const view = await reg.slots({ scope: 'task', taskId: 'l-1', slot: 'preview.actions' });
-		expect(view.entries).toEqual([
+		const actions = async (taskId: string) =>
+			(await reg.slots({ scope: 'task', taskId })).entries.filter(
+				(e) => e.slot === 'preview.actions'
+			);
+		expect(await actions('l-1')).toEqual([
 			expect.objectContaining({
 				key: 'preview-actions-demo/copy',
 				slot: 'preview.actions',
@@ -84,7 +87,6 @@ describe('the example preview action plugin', () => {
 				})
 			})
 		]);
-		const none = await reg.slots({ scope: 'task', taskId: 'l-2', slot: 'preview.actions' });
-		expect(none.entries).toEqual([]);
+		expect(await actions('l-2')).toEqual([]);
 	});
 });

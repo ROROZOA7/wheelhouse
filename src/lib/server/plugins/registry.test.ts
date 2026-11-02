@@ -231,8 +231,7 @@ describe('filling slots', () => {
 		expect(t.entries[0].content).toMatchObject({ value: text('b-1 in beta') });
 	});
 
-	it('fills a task’s preview actions, alone when the query names that slot', async () => {
-		const fetched: string[] = [];
+	it('fills a task’s preview actions beside its other entries', async () => {
 		const p = plugin({
 			id: 'share',
 			providers: [
@@ -240,19 +239,14 @@ describe('filling slots', () => {
 					id: 'link',
 					scope: 'task',
 					ttlMs: 1000,
-					fetch: async (c) => {
-						fetched.push('link');
-						return c.task!.id === 'a-1' ? ok({ url: null }) : { available: false, reason: 'off' };
-					}
+					fetch: async (c) =>
+						c.task!.id === 'a-1' ? ok({ url: null }) : { available: false, reason: 'off' }
 				},
 				{
 					id: 'notes',
 					scope: 'task',
 					ttlMs: 1000,
-					fetch: async () => {
-						fetched.push('notes');
-						return ok(text('notes'));
-					}
+					fetch: async () => ok(text('notes'))
 				}
 			],
 			contributions: [
@@ -274,8 +268,9 @@ describe('filling slots', () => {
 			]
 		});
 		const reg = new PluginRegistry([p], host());
-		const only = await reg.slots({ scope: 'task', taskId: 'a-1', slot: 'preview.actions' });
-		expect(only.entries).toEqual([
+		const all = await reg.slots({ scope: 'task', taskId: 'a-1' });
+		expect(all.entries.map((e) => e.slot).sort()).toEqual(['preview.actions', 'task.section']);
+		expect(all.entries.filter((e) => e.slot === 'preview.actions')).toEqual([
 			expect.objectContaining({
 				key: 'share/share',
 				slot: 'preview.actions',
@@ -285,13 +280,9 @@ describe('filling slots', () => {
 				content: expect.objectContaining({ available: true, value: { url: null } })
 			})
 		]);
-		// Only that slot's providers run.
-		expect(fetched).toEqual(['link']);
-		const all = await reg.slots({ scope: 'task', taskId: 'a-1' });
-		expect(all.entries.map((e) => e.slot).sort()).toEqual(['preview.actions', 'task.section']);
 		// Hidden quietly while its provider has nothing to show.
-		const quiet = await reg.slots({ scope: 'task', taskId: 'b-1', slot: 'preview.actions' });
-		expect(quiet.entries).toEqual([]);
+		const quiet = await reg.slots({ scope: 'task', taskId: 'b-1' });
+		expect(quiet.entries.map((e) => e.slot)).toEqual(['task.section']);
 	});
 
 	it('draws preview actions with blocks, a panel or an element, never an MCP app', () => {
