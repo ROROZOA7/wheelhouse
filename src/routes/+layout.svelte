@@ -98,6 +98,7 @@
 			{sections}
 			{decisionsOpen}
 			{indicators}
+			tourUrl={page.data.tourUrl}
 		/>
 		<Notices />
 		<div class="flex {fixed ? 'min-h-0 flex-1' : ''}">

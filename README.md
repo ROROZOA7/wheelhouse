@@ -35,13 +35,19 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
 <sub>Screenshots show a demo crew working on made-up projects.</sub>
 
+## 🎬 Take the tour
+
+Two minutes on the chat, decisions, the Harbour, a project, a task, PR review and plugins. In Wheelhouse, **Help** (the ? in the header) brings it back.
+
+<!-- TOUR VIDEO: drag tour.mp4 into GitHub's editor and put the https://github.com/user-attachments/assets/… address it gives you on its own line here, in place of this comment (see docs/development.md#recording-the-guide). -->
+
 ## ✨ What you get
 
 - 💬 **Talk to Firstmate like a teammate.** Chat, answer with buttons, mention tasks with `#`, run commands with `/`, or just dictate. A live preview shows as a card under the reply about it, and every open decision as a card you can answer in place.
 
   ![The Firstmate chat: a reply that a pull request is ready, with its live preview as a card underneath, showing the app and links to the pull request and a full-size view](docs/screenshots/chat-preview.png)
 
-  ![Decisions in the Firstmate chat: a review question and a choice between two designs, each a card with Approve, Fix, Skip and Discuss](docs/screenshots/chat-decision.png)
+  ![Answering a decision in the Firstmate chat: under a live preview card, a choice between two onboarding designs gets a note and Approve, and the card folds to the answer](docs/screenshots/guide-chat.png)
 
 - 🗺️ **Harbour.** Every project at a glance: what needs you, what is moving and what landed. Open one for its work, each task with a live console.
 
@@ -66,6 +72,10 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 - 🧭 **Task pages.** Every check, file, PR and log for a task in one place.
 
   ![A task page: the automated checks step by step, with two failing tests and the start of their output](docs/screenshots/task.png)
+
+- 🔍 **PR review.** With the [PR review](https://github.com/chrisjowen/pr-review-wheelhouse) plugin, **Review** on any pull request opens it as a guided review: a walkthrough, a quality pass, then the key changes stop by stop.
+
+  ![Reviewing a pull request: Review PR on a task page opens it in the PR review plugin's tab, which shows the walkthrough, the quality pass and the first stop, with the reviewer's notes above the lines they discuss](docs/screenshots/guide-review.png)
 
 - 📜 **The conversation.** Every question a worker asked and how it was answered.
 

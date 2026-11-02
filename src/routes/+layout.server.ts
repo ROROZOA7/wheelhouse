@@ -7,6 +7,7 @@ import {
 	currentPullRequestTabs
 } from '$lib/server/runtime';
 import { sessionToken } from '$lib/server/session';
+import { tourUrl } from '$lib/tour';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async () => ({
@@ -20,6 +21,8 @@ export const load: LayoutServerLoad = async () => ({
 	addressRewrites: await currentAddressRewrites(),
 	// Where each project's pull requests open for review: a plugin's tab while one is on, else GitHub.
 	pullRequestTabs: await currentPullRequestTabs(),
+	// Where Help's video tour is hosted (WHEELHOUSE_TOUR_URL, else the README's tour section).
+	tourUrl: tourUrl(process.env),
 	// Issued only to pages Wheelhouse serves; mutating requests must echo it.
 	sessionToken: sessionToken()
 });

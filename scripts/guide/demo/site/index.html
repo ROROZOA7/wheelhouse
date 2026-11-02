@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Lumen · Summer in Lisbon</title>
+		<style>
+			:root {
+				--bg: #fbfaf7;
+				--ink: #1d1b18;
+				--muted: #6f6a62;
+				--line: #e7e3dc;
+				--accent: #e2573b;
+				--card: #ffffff;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				font:
+					15px/1.45 -apple-system,
+					BlinkMacSystemFont,
+					'Segoe UI',
+					Inter,
+					sans-serif;
+				background: var(--bg);
+				color: var(--ink);
+			}
+			header {
+				display: flex;
+				align-items: center;
+				gap: 16px;
+				padding: 14px 28px;
+				border-bottom: 1px solid var(--line);
+				background: #fff;
+			}
+			.logo {
+				font-weight: 750;
+				letter-spacing: -0.02em;
+				font-size: 19px;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.logo i {
+				width: 22px;
+				height: 22px;
+				border-radius: 7px;
+				background: conic-gradient(from 200deg, #f7b267, #e2573b, #7b4fd6, #3aa7c9, #f7b267);
+			}
+			nav {
+				display: flex;
+				gap: 18px;
+				color: var(--muted);
+				margin-left: 18px;
+			}
+			nav b {
+				color: var(--ink);
+				font-weight: 600;
+			}
+			.me {
+				margin-left: auto;
+				width: 30px;
+				height: 30px;
+				border-radius: 50%;
+				background: linear-gradient(135deg, #3aa7c9, #7b4fd6);
+			}
+			main {
+				max-width: 1080px;
+				margin: 0 auto;
+				padding: 28px;
+			}
+			.title {
+				display: flex;
+				align-items: end;
+				gap: 16px;
+				margin-bottom: 20px;
+			}
+			h1 {
+				margin: 0;
+				font-size: 30px;
+				letter-spacing: -0.02em;
+			}
+			.sub {
+				color: var(--muted);
+			}
+			.btn {
+				margin-left: auto;
+				border: 0;
+				border-radius: 999px;
+				padding: 9px 18px;
+				font: inherit;
+				font-weight: 600;
+				background: var(--accent);
+				color: #fff;
+			}
+			.btn.ghost {
+				margin-left: 0;
+				background: #fff;
+				color: var(--ink);
+				border: 1px solid var(--line);
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 12px;
+			}
+			.ph {
+				aspect-ratio: 4 / 3;
+				border-radius: 12px;
+			}
+			.ph.tall {
+				grid-row: span 2;
+				aspect-ratio: auto;
+			}
+			.overlay {
+				position: fixed;
+				inset: 0;
+				background: rgba(29, 27, 24, 0.38);
+				display: none;
+				align-items: center;
+				justify-content: center;
+			}
+			.show .overlay {
+				display: flex;
+			}
+			.dialog {
+				width: 440px;
+				background: var(--card);
+				border-radius: 16px;
+				padding: 22px;
+				box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+			}
+			.dialog h2 {
+				margin: 0 0 4px;
+				font-size: 19px;
+			}
+			.field {
+				display: flex;
+				gap: 8px;
+				margin: 16px 0 12px;
+			}
+			.field input {
+				flex: 1;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				padding: 9px 12px;
+				font:
+					13px ui-monospace,
+					Menlo,
+					monospace;
+				background: #f6f4ef;
+				color: var(--ink);
+			}
+			.row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 10px 0;
+				border-top: 1px solid var(--line);
+			}
+			.pill {
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 5px 10px;
+				background: #fff;
+			}
+			.toggle {
+				width: 38px;
+				height: 22px;
+				border-radius: 999px;
+				background: var(--accent);
+				position: relative;
+			}
+			.toggle::after {
+				content: '';
+				position: absolute;
+				right: 3px;
+				top: 3px;
+				width: 16px;
+				height: 16px;
+				border-radius: 50%;
+				background: #fff;
+			}
+			.center {
+				min-height: calc(100vh - 60px);
+				display: grid;
+				place-items: center;
+				text-align: center;
+			}
+			.center .ph {
+				width: 220px;
+				margin: 0 auto 22px;
+				border-radius: 20px;
+				filter: grayscale(0.6);
+				opacity: 0.7;
+			}
+			.tour {
+				max-width: 520px;
+				margin: 40px auto;
+				background: #fff;
+				border: 1px solid var(--line);
+				border-radius: 18px;
+				padding: 28px;
+			}
+			.steps {
+				display: flex;
+				gap: 6px;
+				margin-bottom: 22px;
+			}
+			.steps span {
+				flex: 1;
+				height: 5px;
+				border-radius: 4px;
+				background: var(--line);
+			}
+			.steps span.on {
+				background: var(--accent);
+			}
+			.cards {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 14px;
+				margin-top: 26px;
+			}
+			.card {
+				background: #fff;
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				padding: 18px;
+				text-align: left;
+			}
+			.card .ph {
+				aspect-ratio: 16 / 9;
+				margin-bottom: 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<div class="logo"><i></i>Lumen</div>
+			<nav><b>Albums</b><span>Shared with me</span><span>Uploads</span></nav>
+			<div class="me"></div>
+		</header>
+		<div id="view"></div>
+		<script>
+			const g = [
+				['#f7b267', '#e2573b'],
+				['#3aa7c9', '#1d5f8a'],
+				['#f4d58d', '#bf8b2e'],
+				['#7b4fd6', '#3b2a7a'],
+				['#9ad1d4', '#3f8f8f'],
+				['#f28482', '#84a59d'],
+				['#ffd6a5', '#e76f51'],
+				['#cdb4db', '#5e548e'],
+				['#a3c4f3', '#3d5a80'],
+				['#e9c46a', '#2a9d8f'],
+				['#f4a261', '#264653']
+			];
+			const ph = (i, cls = '') =>
+				`<div class="ph ${cls}" style="background:linear-gradient(${(i * 47) % 360}deg,${g[i % g.length][0]},${g[i % g.length][1]})"></div>`;
+			const album = `<main><div class="title"><div><h1>Summer in Lisbon</h1><div class="sub">48 photos · 3 people</div></div><button class="btn">Share album</button></div>
+				<div class="grid">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 2].map((i, k) => ph(i, k === 1 || k === 6 ? 'tall' : '')).join('')}</div></main>`;
+			const share = `<div class="overlay"><div class="dialog"><h2>Share “Summer in Lisbon”</h2><div class="sub">Anyone with the link can view. No account needed.</div>
+				<div class="field"><input value="https://lumen.example/s/k3P9-wq7Z" readonly /><button class="btn" style="margin-left:0">Copy link</button></div>
+				<div class="row"><span>Link expires</span><span class="pill">In 7 days ▾</span></div>
+				<div class="row"><span>Allow downloads</span><span class="toggle"></span></div>
+				<div class="row"><span class="sub">2 links active</span><button class="btn ghost">Manage links</button></div></div></div>`;
+			const expired = `<div class="center"><div>${ph(1)}<h1>This link has expired</h1><p class="sub">Ask the person who shared “Summer in Lisbon” for a new link.</p><button class="btn" style="margin:12px auto 0">Get Lumen free</button></div></div>`;
+			const tour = `<div class="tour"><div class="steps"><span class="on"></span><span></span><span></span></div>${ph(3)}<h1 style="margin-top:20px">Upload your first photos</h1><p class="sub">Drag photos here or pick a folder. Lumen keeps the originals and strips location data before anything is shared.</p><div style="display:flex;gap:10px;margin-top:18px"><button class="btn ghost">Skip tour</button><button class="btn">Next: albums</button></div></div>`;
+			const welcome = `<main style="text-align:center"><h1 style="margin-top:30px">Welcome to Lumen</h1><p class="sub">Three things to get you started.</p><div class="cards">
+				<div class="card">${ph(0)}<b>Upload</b><div class="sub">Add photos from any device.</div></div>
+				<div class="card">${ph(4)}<b>Make an album</b><div class="sub">Group a trip or an event.</div></div>
+				<div class="card">${ph(7)}<b>Share a link</b><div class="sub">No account needed to view.</div></div></div></main>`;
+			const v = new URLSearchParams(location.search).get('view') ?? 'share';
+			const el = document.getElementById('view');
+			if (v === 'expired') el.innerHTML = expired;
+			else if (v === 'tour') el.innerHTML = tour;
+			else if (v === 'welcome') el.innerHTML = welcome;
+			else {
+				el.innerHTML = album + share;
+				if (v === 'share') document.body.classList.add('show');
+			}
+		</script>
+	</body>
+</html>

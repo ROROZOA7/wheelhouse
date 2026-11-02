@@ -17,12 +17,14 @@
 	import { clock } from '$lib/format';
 	import BellMenu from './bell/BellMenu.svelte';
 	import UpdateMenu from './UpdateMenu.svelte';
+	import HelpMenu from './HelpMenu.svelte';
 	import type { AllowanceWindow } from '$lib/types';
 
 	/**
 	 * The bar across the top: the ship's status, the project switcher, Wheelhouse's
-	 * updates, the bell and the light/dark switch. The main sections live in the left-hand menu (Sidebar); on a
-	 * narrow screen, where that menu is left out, they sit here in the bar instead.
+	 * updates, the bell, settings, help (the video tour) and the light/dark switch. The main
+	 * sections live in the left-hand menu (Sidebar); on a narrow screen, where that menu is
+	 * left out, they sit here in the bar instead.
 	 */
 	let {
 		dark,
@@ -30,7 +32,8 @@
 		atRisk = null,
 		sections,
 		decisionsOpen = 0,
-		indicators = []
+		indicators = [],
+		tourUrl
 	}: {
 		dark: boolean;
 		onToggleTheme: () => void;
@@ -39,6 +42,8 @@
 		decisionsOpen?: number;
 		/** Fleet plugins' small header indicators. */
 		indicators?: SlotEntry[];
+		/** Where Help's video tour is hosted. */
+		tourUrl?: string;
 	} = $props();
 
 	const fleet = $derived(currentFleet());
@@ -239,6 +244,7 @@
 			>
 				<Settings />
 			</Button>
+			<HelpMenu url={tourUrl} />
 			<Button
 				variant="ghost"
 				size="icon-sm"
