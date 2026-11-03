@@ -1,15 +1,18 @@
 /**
- * Decisions in the chat: every question in the decision inbox shows as a card
- * of its own in the conversation, at the time it was asked, whether or not
- * Firstmate's replies mention it. An open one is the Decisions page's own
- * decision box; one the captain answered (here or anywhere else in
- * Wheelhouse) stays where it was, folded to its answer: at once from this
- * browser's answer, then from the inbox's record of what was sent, then, once
- * the question has left the inbox, from the answered log. Pure, so it is
- * unit-tested.
+ * Decisions in the chat: every question Firstmate escalated to the captain
+ * shows as a card of its own in the conversation, at the time it was asked,
+ * whether or not Firstmate's replies mention it, with the form that fits it
+ * (lib/decisionform.ts). A question Firstmate is settling itself shows only
+ * once the captain brings it into the chat (Chat about this, or Change this
+ * call, on the Decisions page) or has talked about it here. One the captain
+ * answered (here or anywhere else in Wheelhouse) stays where it was, folded to
+ * its answer: at once from this browser's answer, then from the inbox's record
+ * of what was sent, then, once the question has left the inbox, from the
+ * answered log. Pure, so it is unit-tested.
  */
 import {
 	choiceLabel,
+	escalated,
 	type AnsweredDecision,
 	type InboxAction,
 	type InboxCard,
@@ -71,11 +74,16 @@ const headOf = (c: InboxCard): DecisionHead => ({
 	askedAt: c.askedAt
 });
 
-/** Every decision to show: the open questions, the ones answered, and those answered earlier. */
+/**
+ * Every decision to show: the open questions Firstmate escalated, any other
+ * the captain brought into the chat (`opened`, by card id) or answered, and
+ * those answered earlier.
+ */
 export function chatDecisions(
 	cards: InboxCard[],
 	answered: AnsweredDecision[],
-	local: Record<string, LocalAnswer>
+	local: Record<string, LocalAnswer>,
+	opened: ReadonlySet<string> = new Set()
 ): ChatDecision[] {
 	const out: ChatDecision[] = [];
 	const shown = new Set<string>();
@@ -83,6 +91,7 @@ export function chatDecisions(
 		const head = headOf(c);
 		const mine = local[c.id]?.question === c.question ? local[c.id] : null;
 		const taken = c.sent && c.sent.delivery !== 'failed' ? c.sent : null;
+		if (!escalated(c) && !opened.has(c.id) && !mine && !taken) continue;
 		if (mine && !(mine.posted && taken)) {
 			out.push({
 				id: c.id,

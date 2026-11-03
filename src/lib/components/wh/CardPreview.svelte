@@ -26,6 +26,6 @@
 		/></button
 	>
 	{#if open}<div class="mt-2">
-			<LivePreview taskId={task.id} compact feedback={task.status !== 'landed'} />
+			<LivePreview taskId={task.id} compact />
 		</div>{/if}
 </div>

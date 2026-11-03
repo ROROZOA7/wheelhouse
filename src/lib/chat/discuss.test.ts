@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { discussText, parseDiscuss, pendingThreads, threads } from './discuss';
+import {
+	FORM_HINT,
+	discussText,
+	parseDiscuss,
+	pendingThreads,
+	refinedForm,
+	threads
+} from './discuss';
 import type { Item, Part } from './fold';
 import type { Pending } from './outbox';
 
@@ -37,9 +44,19 @@ describe('discussText and parseDiscuss', () => {
 	it('quotes the task, key and question before the words, and reads them back', () => {
 		const t = discussText(REF, '  What’s the risk?  ');
 		expect(t).toBe(
-			'> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n\nWhat’s the risk?'
+			`> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n${FORM_HINT}\n\nWhat’s the risk?`
 		);
-		expect(parseDiscuss(t)).toEqual({ cardId: 'lumen-pricing:layout', body: 'What’s the risk?' });
+		expect(parseDiscuss(t)).toEqual({
+			cardId: 'lumen-pricing:layout',
+			question: REF.question,
+			body: 'What’s the risk?'
+		});
+		// Messages sent before the form hint read back the same way.
+		expect(
+			parseDiscuss(
+				'> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n\nWhat’s the risk?'
+			)
+		).toEqual({ cardId: 'lumen-pricing:layout', question: REF.question, body: 'What’s the risk?' });
 	});
 
 	it('sends nothing without words, or for a task or key it could not read back', () => {
@@ -75,8 +92,20 @@ describe('threads', () => {
 		expect([...hidden]).toEqual(['u1', 't1']);
 		expect(byCard.get('lumen-pricing:layout')).toEqual({
 			messages: [
-				{ id: 'u1', who: 'captain', text: 'What’s the risk?', at: items[2].at },
-				{ id: 't1-b', who: 'firstmate', text: 'Low risk.', at: items[3].at }
+				{
+					id: 'u1',
+					who: 'captain',
+					text: 'What’s the risk?',
+					at: items[2].at,
+					question: REF.question
+				},
+				{
+					id: 't1-b',
+					who: 'firstmate',
+					text: 'Low risk.',
+					at: items[3].at,
+					question: REF.question
+				}
 			],
 			answering: false
 		});
@@ -101,6 +130,36 @@ describe('threads', () => {
 		const { hidden, byCard } = threads(items, new Set(['lumen-pricing:layout']));
 		expect([...hidden]).toEqual(['u1', 'u2']);
 		expect(byCard.get('lumen-pricing:layout')?.messages.map((m) => m.id)).toEqual(['u1', 'u2']);
+	});
+});
+
+describe('refinedForm', () => {
+	const formReply = (opts: string) =>
+		`Here are the options.\n\n\`\`\`decision-form\nWhich one?\n${opts}\n\`\`\``;
+
+	it('takes Firstmate’s latest form about the question asked', () => {
+		const items = [
+			user('u1', discussText(REF, 'Other options?')),
+			turn('t1', [text('t1-a', formReply('- A\n- B (recommended)'))])
+		];
+		const thread = threads(items, new Set(['lumen-pricing:layout'])).byCard.get(
+			'lumen-pricing:layout'
+		)!;
+		const r = refinedForm(thread, REF.question);
+		expect(r?.id).toBe('t1-a');
+		expect(r?.form.from).toBe('firstmate');
+	});
+
+	it('ignores a form Firstmate gave for an earlier question under the same card id', () => {
+		const items = [
+			user('u1', discussText(REF, 'Other options?')),
+			turn('t1', [text('t1-a', formReply('- A\n- B\n- C'))])
+		];
+		const thread = threads(items, new Set(['lumen-pricing:layout'])).byCard.get(
+			'lumen-pricing:layout'
+		)!;
+		expect(refinedForm(thread, 'Ship the new layout behind a flag?')).toBeNull();
+		expect(refinedForm(null, REF.question)).toBeNull();
 	});
 });
 

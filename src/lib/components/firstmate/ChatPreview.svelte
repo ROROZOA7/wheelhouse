@@ -19,7 +19,7 @@
 	/**
 	 * A task's live preview under the Firstmate reply about it: the page,
 	 * scaled down from desktop size as a Harbour card draws it, as a picture
-	 * that opens full size (with the feedback thread, while the work has not
+	 * that opens full size (with the preview helper, while the work has not
 	 * landed), and the pull request and its checks underneath. Landed work says
 	 * so. The server checks the preview is on this machine and answering before
 	 * a frame is drawn (LivePreview), and says plainly when it is not.
@@ -79,13 +79,7 @@
 	</header>
 
 	<div class="border-y border-hair">
-		<LivePreview
-			taskId={task.id}
-			compact
-			toolbar={false}
-			feedback={false}
-			onopen={() => (full = true)}
-		/>
+		<LivePreview taskId={task.id} compact toolbar={false} onopen={() => (full = true)} />
 	</div>
 
 	<footer class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-xs">
@@ -142,7 +136,7 @@
 		taskId={task.id}
 		title={task.shortTitle}
 		{url}
-		feedback={!preview.landed}
+		talk={!preview.landed}
 		onclose={() => (full = false)}
 	/>
 {/if}

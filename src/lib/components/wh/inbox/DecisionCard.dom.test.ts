@@ -57,7 +57,7 @@ describe('DecisionCard', () => {
 				card: failed,
 				error: 'Not delivered to Firstmate: note refused',
 				now: Date.parse('2026-10-27T10:01:00Z'),
-				onAnswer: () => {},
+				onAgree: () => {},
 				onLater: () => {}
 			}
 		});
@@ -82,7 +82,7 @@ describe('DecisionCard', () => {
 	const show = (c: InboxCard, onClose: () => void) => {
 		app = mount(DecisionCard, {
 			target: document.body,
-			props: { card: c, now: 0, onAnswer: () => {}, onLater: () => {}, onClose }
+			props: { card: c, now: 0, onAgree: () => {}, onLater: () => {}, onClose }
 		});
 		flushSync();
 	};
@@ -139,61 +139,68 @@ describe('DecisionCard', () => {
 			choices
 		});
 
-	it('shows each call as choices, the recommended one picked, and sends once every call has a pick', () => {
-		const answered: string[] = [];
+	it('opens the question in the chat and agrees with the recommended option in one tap', () => {
+		const agreed: number[] = [];
 		app = mount(DecisionCard, {
 			target: document.body,
-			props: {
-				card: hold(),
-				now: 0,
-				onAnswer: (c: string) => answered.push(c),
-				onLater: () => {}
-			}
+			props: { card: hold(), now: 0, onAgree: () => agreed.push(1), onLater: () => {} }
 		});
 		flushSync();
 		expect(document.querySelector('h3')!.textContent!.trim()).toBe('Gateway design calls');
-		const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-		expect(radios.map((r) => [r.value, r.checked])).toEqual([
-			['A', true],
-			['C', false],
-			['1', false],
-			['2', false]
-		]);
-		const send = [...document.querySelectorAll('button')].find((b) =>
-			b.textContent!.includes('Send picks')
-		)!;
-		expect(send.disabled).toBe(true);
-		expect(document.body.textContent).toContain(
-			'Pick one for 2) First channel to send your picks.'
-		);
-		radios[3].click();
-		flushSync();
-		expect(radios.map((r) => r.checked)).toEqual([true, false, false, true]);
-		expect(send.disabled).toBe(false);
-		send.click();
-		expect(answered).toEqual(['approve']);
-	});
-
-	it('shows answer keys and Ask me later only where the page offers them', () => {
-		const buttons = () =>
-			[...document.querySelectorAll('button')].map((b) => b.textContent!.trim());
-		app = mount(DecisionCard, {
-			target: document.body,
-			props: { card: hold(), shortcuts: true, now: 0, onAnswer: () => {}, onLater: () => {} }
-		});
-		flushSync();
-		expect(buttons()).toEqual(['Evidence', 'Send picksa', 'Fixf', 'Skips', 'Ask me laterl']);
+		// The card's own calls are answered in the chat; here there is no form to fill in.
+		expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+		const chat = document.querySelector<HTMLAnchorElement>('a[data-chat-about]')!;
+		expect(chat.getAttribute('href')).toBe('/?decision=demo-billing%3Acaptain-hold');
+		// Two calls, only one with a recommended option: nothing to agree with in one tap.
+		expect(document.querySelector('[data-agree]')).toBeNull();
 		unmount(app);
 		document.body.innerHTML = '';
-		// On deck and the task page: the same box, picks and all, without the Decisions page's keys.
 		app = mount(DecisionCard, {
 			target: document.body,
-			props: { card: hold(), now: 0, onAnswer: () => {} }
+			props: { card: card(), now: 0, onAgree: () => agreed.push(2) }
 		});
 		flushSync();
-		expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(4);
+		const agree = document.querySelector<HTMLButtonElement>('[data-agree]')!;
+		expect(agree.textContent!.trim()).toBe('Agree: Merge');
+		expect(document.body.textContent).toContain('Firstmate recommends: Merge');
+		agree.click();
+		expect(agreed).toEqual([2]);
+	});
+
+	it('shows action keys and Ask me later only where the page offers them', () => {
+		const actions = () =>
+			[...document.querySelectorAll('[role="group"] a, [role="group"] button')].map((b) =>
+				b.textContent!.trim()
+			);
+		const recommended = card({
+			kind: 'hold',
+			key: 'captain-hold',
+			options: optionsFor('hold'),
+			recommendation: { choice: 'approve', text: 'It is ready.' }
+		});
+		app = mount(DecisionCard, {
+			target: document.body,
+			props: { card: recommended, shortcuts: true, now: 0, onAgree: () => {}, onLater: () => {} }
+		});
+		flushSync();
+		expect(actions()).toEqual(['Chat about thisEnter', 'Agree: Go aheada', 'Ask me laterl']);
+		unmount(app);
+		document.body.innerHTML = '';
+		app = mount(DecisionCard, {
+			target: document.body,
+			props: { card: recommended, now: 0, onAgree: () => {} }
+		});
+		flushSync();
 		expect(document.querySelectorAll('kbd')).toHaveLength(0);
-		expect(buttons()).toEqual(['Evidence', 'Send picks', 'Fix', 'Skip']);
+		expect(actions()).toEqual(['Chat about this', 'Agree: Go ahead']);
+	});
+
+	it('says a question Firstmate is settling is its own, and can still be taken over', () => {
+		show(decision(), () => {});
+		expect(document.body.textContent).toContain(
+			'Firstmate is handling it; yours to take over if you want'
+		);
+		expect(document.querySelector('a[data-chat-about]')).not.toBeNull();
 	});
 
 	it('links the Markdown files a hold reason and its evidence name to the reader', () => {
@@ -212,7 +219,7 @@ describe('DecisionCard', () => {
 				}),
 				expanded: true,
 				now: Date.parse('2026-10-27T10:01:00Z'),
-				onAnswer: () => {},
+				onAgree: () => {},
 				onLater: () => {}
 			}
 		});

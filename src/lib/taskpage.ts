@@ -1,5 +1,4 @@
-import { FEEDBACK_PREFIX } from './preview';
-import type { BridgeMessage, Delivery, PassageStep, TaskEvidence, TaskSummary } from './types';
+import type { PassageStep, TaskEvidence, TaskSummary } from './types';
 
 /**
  * The task page's layout rules: which tabs it shows, which one opens, which
@@ -83,41 +82,4 @@ export function stepGist(
 		}
 	}
 	return parts.length ? parts.join(' · ') : s.note;
-}
-
-/** One piece of feedback sent from a task's live preview, as its comment thread shows it. */
-export interface PreviewComment {
-	id: string;
-	text: string;
-	at: string;
-	/** In plain words: sending, sent, read by Firstmate, or not delivered. */
-	status: string;
-	failed: boolean;
-	reply: string | null;
-}
-
-const STATUS: Record<Delivery, string> = {
-	sending: 'Sending…',
-	uncertain: 'Confirming Firstmate has it…',
-	'saved-unannounced': 'Saved; Firstmate reads it at its next check',
-	delivered: 'Sent to Firstmate',
-	failed: 'Not delivered'
-};
-
-/**
- * The feedback sent from this task's preview (see feedbackNote in preview.ts),
- * oldest first, out of everything Wheelhouse has sent to Firstmate.
- */
-export function previewThread(messages: BridgeMessage[], taskId: string): PreviewComment[] {
-	return messages
-		.filter((m) => m.taskId === taskId && FEEDBACK_PREFIX.test(m.text))
-		.map((m) => ({
-			id: m.requestId,
-			text: m.text.replace(FEEDBACK_PREFIX, ''),
-			at: m.submittedAt,
-			status:
-				m.delivery === 'delivered' && m.acknowledged ? 'Firstmate has it' : STATUS[m.delivery],
-			failed: m.delivery === 'failed',
-			reply: m.reply?.body ?? null
-		}));
 }

@@ -1,3 +1,4 @@
+import { batchText } from '../../previewhelper';
 import { describe, expect, it } from 'vitest';
 import {
 	changeRoute,
@@ -107,6 +108,18 @@ describe('readyTimes', () => {
 });
 
 describe('wheelhouseRequest', () => {
+	it('reads a feedback list sent from the preview helper as one preview request', () => {
+		const text = batchText({ id: 't', title: 'Share links' }, 'http://127.0.0.1:4436/', [
+			{ text: 'Bigger' },
+			{ text: 'Calmer header' }
+		]);
+		expect(wheelhouseRequest(message({ at: 1, text }))).toEqual({
+			kind: 'preview',
+			text: '1. Bigger\n2. Calmer header',
+			where: null
+		});
+	});
+
 	it('reads preview feedback, a change asked from the old PR review and a Decisions Fix', () => {
 		expect(
 			wheelhouseRequest(message({ at: 1, text: feedbackNote('http://127.0.0.1:4436/', 'Bigger') }))

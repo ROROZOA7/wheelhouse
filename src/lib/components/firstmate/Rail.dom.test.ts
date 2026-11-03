@@ -37,7 +37,7 @@ const hold: InboxCard = {
 		screenshots: []
 	},
 	options: optionsFor('hold'),
-	recommendation: null,
+	recommendation: { choice: 'approve', text: 'Behind a flag first.' },
 	choices: null,
 	sent: null
 };
@@ -83,9 +83,7 @@ describe("On deck's Needs you", () => {
 		expect(tab()).toBe('Needs you1');
 		expect(panel().querySelectorAll('article')).toHaveLength(1);
 		expect(panel().textContent!.split('Ship the share links').length - 1).toBe(1);
-		[...panel().querySelectorAll('button')]
-			.find((b) => b.textContent?.trim() === 'Approve')!
-			.click();
+		panel().querySelector<HTMLButtonElement>('[data-agree]')!.click();
 		flushSync();
 		expect(panel().querySelector('article')).toBeNull();
 		expect(panel().textContent).not.toContain('Ship the share links');

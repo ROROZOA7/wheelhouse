@@ -176,11 +176,14 @@ describe('decisions in the chat', () => {
 		]);
 		const open = decision('lumen-pricing:layout');
 		expect(open.textContent).toMatch(/Ship the three-tier pricing layout\?/);
-		expect(button(open, 'Approve')).toBeTruthy();
+		// A decision without named options is answered with the two plain answers that fit it.
+		expect(button(open, 'Go ahead')).toBeTruthy();
+		expect(button(open, 'Change course')).toBeTruthy();
+		expect(button(open, 'Approve')).toBeFalsy();
 		const folded = decision('answer:inbox-backups');
-		expect(folded.textContent).toMatch(/You answered\s+Approve/);
+		expect(folded.textContent).toMatch(/You decided\s+Go ahead/);
 		expect(folded.textContent).toMatch(/Keep the old bucket read-only for a month\./);
-		expect(folded.textContent).toMatch(/Firstmate has your answer/);
+		expect(folded.textContent).toMatch(/Firstmate has it and passes it on/);
 	});
 
 	it('answers through the decision inbox, as the Decisions page does, and folds the card', async () => {
@@ -200,7 +203,7 @@ describe('decisions in the chat', () => {
 				: Response.json({ message: { delivery: 'delivered' } })
 		);
 		start(BASE);
-		button(decision('lumen-pricing:layout'), 'Approve').click();
+		button(decision('lumen-pricing:layout'), 'Go ahead').click();
 		flushSync();
 		const [url, init] = fetchMock.mock.calls.find(([u]) => u === '/api/inbox')!;
 		expect(url).toBe('/api/inbox');
@@ -215,7 +218,7 @@ describe('decisions in the chat', () => {
 		await vi.waitFor(() =>
 			expect(
 				decision('lumen-pricing:layout').querySelector('[data-answered]')?.textContent
-			).toMatch(/You answered\s+Approve[\s\S]*Firstmate has your answer/)
+			).toMatch(/You decided\s+Go ahead[\s\S]*Firstmate has it and passes it on/)
 		);
 	});
 
@@ -266,7 +269,7 @@ describe('decisions in the chat', () => {
 		expect(discuss.title).toMatch(/cannot be asked about it here/);
 	});
 
-	it('opens a merge call’s pull request in the review tool, beside Approve, Fix and Skip', () => {
+	it('opens a merge call’s pull request in the review tool, beside Merge and Not yet', () => {
 		const pr = 'https://github.com/demo/lumen/pull/212';
 		const merge: InboxCard = {
 			...PRICING,
@@ -280,14 +283,15 @@ describe('decisions in the chat', () => {
 		const tabs = { lumen: '/projects/lumen/pr-review/review?pr={url}' };
 		state.page.data = { inbox: view([merge]), sessionToken: 't', pullRequestTabs: tabs };
 		start(BASE);
-		const answers = decision('lumen-pricing:merge-pr').querySelector('[role="group"]')!;
-		const review = answers.querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
+		const card = decision('lumen-pricing:merge-pr');
+		const answers = card.querySelector('[role="group"]')!;
+		const review = card.querySelector<HTMLAnchorElement>('a[data-review-pr]')!;
 		expect(review.textContent?.trim()).toBe('Review');
 		expect(review.getAttribute('href')).toBe(
 			`/projects/lumen/pr-review/review?pr=${encodeURIComponent(pr)}`
 		);
 		expect(review.target).toBe('');
-		for (const b of ['Approve', 'Fix', 'Skip']) expect(button(answers, b)).toBeTruthy();
+		for (const b of ['Merge', 'Not yet']) expect(button(answers, b)).toBeTruthy();
 
 		// With no review plugin on for the project, Review is the pull request on GitHub.
 		unmount(app);
@@ -299,10 +303,177 @@ describe('decisions in the chat', () => {
 		expect(plain.target).toBe('_blank');
 	});
 
+	it('replaces the form with the one Firstmate writes in its reply, and sends the words decided', async () => {
+		const reply = [
+			'The middle tier may draw from the top one. Two ways to soften it:',
+			'',
+			'```decision-form',
+			'Which layout should ship?',
+			'- Three tiers, middle one highlighted (recommended)',
+			'- Two tiers only: drops the middle tier',
+			'- Three tiers as built',
+			'```'
+		].join('\n');
+		fetchMock.mockImplementation(async () => Response.json({ message: { delivery: 'delivered' } }));
+		start([
+			...BASE.slice(0, 3),
+			captain('u3', '16', ASK),
+			firstmate('a3', '17', reply),
+			done('d3', '17'),
+			...BASE.slice(3)
+		]);
+		const card = decision('lumen-pricing:layout');
+		expect(card.querySelector('[data-refined]')).not.toBeNull();
+		const form = card.querySelector<HTMLElement>('[data-decision-form]')!;
+		expect(form.dataset.formFrom).toBe('firstmate');
+		expect(form.textContent).toContain('Which layout should ship?');
+		// The thread shows Firstmate's words without the block.
+		const thread = card.querySelector('[data-discussion]')!;
+		expect(thread.textContent).toContain('Two ways to soften it');
+		expect(thread.textContent).not.toContain('decision-form');
+		const decide = card.querySelector<HTMLButtonElement>('[data-decide]')!;
+		expect(decide.textContent!.trim()).toBe('Decide: Three tiers, middle one highlighted');
+		decide.click();
+		flushSync();
+		const posted = fetchMock.mock.calls.find(([u, i]) => u === '/api/inbox' && i)!;
+		expect(JSON.parse(posted[1].body)).toEqual({
+			cardId: 'lumen-pricing:layout',
+			choice: 'approve',
+			note: null,
+			decided: 'Three tiers, middle one highlighted'
+		});
+	});
+
+	it('folds the talk about an earlier question asked under the same card id', () => {
+		const reply = [
+			'Two ways to go:',
+			'',
+			'```decision-form',
+			'Which layout should ship?',
+			'- Three tiers (recommended)',
+			'- Two tiers',
+			'```'
+		].join('\n');
+		const asked = { ...PRICING, question: 'Keep the annual discount at 20%?', askedAt: at('30') };
+		state.page.data = { inbox: view([asked]), sessionToken: 't' };
+		start([
+			...BASE.slice(0, 3),
+			captain('u3', '16', ASK),
+			firstmate('a3', '17', reply),
+			done('d3', '17'),
+			captain(
+				'u4',
+				'31',
+				discussText(
+					{ taskId: 'lumen-pricing', key: 'layout', question: asked.question },
+					'Why 20%?'
+				)
+			),
+			firstmate('a4', '32', 'It matches what the old page offered.'),
+			done('d4', '32'),
+			...BASE.slice(3)
+		]);
+		const card = decision('lumen-pricing:layout');
+		const thread = card.querySelector('[data-discussion]')!;
+		const earlier = thread.querySelector<HTMLDetailsElement>('details[data-earlier]')!;
+		expect(earlier.open).toBe(false);
+		expect(earlier.querySelector('summary')!.textContent).toBe(
+			`Earlier question: “${PRICING.question}”`
+		);
+		expect(earlier.textContent).toContain('What’s the risk?');
+		expect(earlier.textContent).toContain('Two ways to go:');
+		// The old form neither answers the new question nor claims to have changed its options.
+		expect(thread.textContent).not.toContain('Firstmate updated the options above.');
+		expect(card.querySelector('[data-refined]')).toBeNull();
+		// The talk about the current question stays outside the fold.
+		const current = [...thread.querySelectorAll('li')].filter(
+			(li) => !li.closest('details') && !li.querySelector('details')
+		);
+		expect(current.map((li) => li.textContent)).toEqual([
+			expect.stringContaining('Why 20%?'),
+			expect.stringContaining('It matches what the old page offered.')
+		]);
+	});
+
+	it('leaves out a question Firstmate is settling until it is opened from the Decisions page', async () => {
+		const review: InboxCard = {
+			...PRICING,
+			id: 'lumen-pr-tab:nm-review',
+			taskId: 'lumen-pr-tab',
+			kind: 'review',
+			key: 'nm-review',
+			owner: 'firstmate',
+			question: 'Unrequested setting: keep it?',
+			askedAt: at('10')
+		};
+		state.page.data = { inbox: view([PRICING, review]), sessionToken: 't' };
+		// A read of the inbox (a refresh left by an earlier answer) returns the same view.
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			url === '/api/inbox' && !init ? Response.json(view([PRICING, review])) : Response.json({})
+		);
+		start(BASE);
+		expect(document.querySelector('[data-chat-decision="lumen-pr-tab:nm-review"]')).toBeNull();
+		unmount(app);
+		const { composerBus } = await import('./bus.svelte');
+		composerBus.decision = 'lumen-pr-tab:nm-review';
+		start(BASE);
+		const card = decision('lumen-pr-tab:nm-review');
+		expect(card.textContent).toContain('Firstmate is handling it; yours to take over');
+		// It comes into view with its discussion open, ready to ask about it.
+		await vi.waitFor(() => expect(card.querySelector('[data-discussion]')).not.toBeNull());
+		await vi.waitFor(() => expect(composerBus.decision).toBeNull());
+		// Opened once, it stays in the conversation.
+		flushSync();
+		expect(decision('lumen-pr-tab:nm-review')).not.toBeNull();
+		localStorage.clear();
+	});
+
 	it('shows no decisions while the inbox is not available', () => {
 		state.page.data = { inbox: { ...view(), available: false } };
 		start(BASE);
 		expect(document.querySelector('[data-chat-decision]')).toBeNull();
+	});
+});
+
+describe('preview feedback in the chat', () => {
+	it('shows a list sent from a preview as the captain’s card to Firstmate, where it was sent', async () => {
+		const { live } = await import('$lib/client/live.svelte');
+		const { batchText } = await import('$lib/previewhelper');
+		live.messages = {
+			schema: 'wheelhouse-messages.v1',
+			available: true,
+			reason: null,
+			receiptsAt: null,
+			receiptsError: null,
+			messages: [
+				{
+					requestId: 'wh-batch',
+					text: batchText({ id: 'lumen-share', title: 'Share links' }, 'http://127.0.0.1:5240/', [
+						{ text: 'Make links last 30 days' }
+					]),
+					taskId: 'lumen-share',
+					submittedAt: at('10'),
+					delivery: 'delivered',
+					deliveryDetail: null,
+					acknowledged: true,
+					noteId: 'n1',
+					reply: { body: 'Passed to the worker.', at: at('11') }
+				}
+			]
+		} as never;
+		state.page.data = { inbox: view([]), sessionToken: 't' };
+		start(BASE);
+		const card = document.querySelector<HTMLElement>('[data-feedback-batch]')!;
+		expect(card.textContent).toContain('To Firstmate · preview feedback');
+		expect(card.textContent).toContain('Make links last 30 days');
+		expect(card.textContent).toContain('Firstmate has it and passes it to the same task');
+		expect(card.textContent).toContain('Passed to the worker.');
+		// Between the morning messages and the later ones, at the time it was sent.
+		const order = [
+			...document.querySelectorAll<HTMLElement>('[data-bubble], [data-feedback-batch]')
+		].map((el) => (el.dataset.feedbackBatch !== undefined ? 'batch' : el.textContent?.trim()));
+		expect(order).toEqual(['Morning.', 'Morning, Captain.', 'batch', 'Thanks.', 'Understood.']);
+		live.messages = null;
 	});
 });
 

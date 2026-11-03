@@ -1,13 +1,14 @@
 <script lang="ts">
 	/**
-	 * On deck's slice of the decision inbox: the next few questions still
-	 * waiting, each in the same decision box as the Decisions page, and a link
-	 * to the full page. An answered question leaves at once.
+	 * On deck's slice of the decision inbox: the next few questions Firstmate
+	 * escalated that still wait on the captain, each in the same decision box as
+	 * the Decisions page, and a link to the full page. An answered question
+	 * leaves at once.
 	 */
 	import { ArrowRight } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { inbox } from '$lib/client/inbox.svelte';
-	import type { InboxView } from '$lib/inbox';
+	import { escalated, type InboxView } from '$lib/inbox';
 	import type { Project } from '$lib/types';
 	import OpenDecision from './OpenDecision.svelte';
 
@@ -22,7 +23,7 @@
 	const seed = $derived(page.data.inbox as InboxView | undefined);
 	const view = $derived(inbox.view(seed));
 	const waiting = $derived(
-		inbox.shown(now, seed).shown.filter((c) => !scope || c.projectId === scope)
+		inbox.shown(now, seed).shown.filter((c) => escalated(c) && (!scope || c.projectId === scope))
 	);
 	const stack = $derived(waiting.slice(0, limit));
 	const projectName = (id: string | null) =>

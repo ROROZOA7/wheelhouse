@@ -1,7 +1,9 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { DECIDED_MAX } from '../../decisionform';
 import {
 	CHOICES,
+	DECIDED_LABEL,
 	NOTE_MAX,
 	answerText,
 	choiceLabel,
@@ -118,7 +120,13 @@ export class InboxService {
 	 */
 	async answer(
 		requestId: string | null,
-		body: { cardId?: unknown; choice?: unknown; note?: unknown; picks?: unknown }
+		body: {
+			cardId?: unknown;
+			choice?: unknown;
+			note?: unknown;
+			picks?: unknown;
+			decided?: unknown;
+		}
 	): Promise<AnswerResult> {
 		const messenger = this.deps.messenger;
 		if (!messenger) {
@@ -145,6 +153,21 @@ export class InboxService {
 		if (picks === null) {
 			return { ok: false, status: 400, error: 'Send the picks as option ids by call.' };
 		}
+		if (body.decided !== undefined && body.decided !== null && typeof body.decided !== 'string') {
+			return { ok: false, status: 400, error: 'Send what was decided as text.' };
+		}
+		const decided =
+			typeof body.decided === 'string' ? body.decided.replace(/\s+/g, ' ').trim() : '';
+		if (decided.length > DECIDED_MAX) {
+			return {
+				ok: false,
+				status: 413,
+				error: `What was decided is limited to ${DECIDED_MAX} characters.`
+			};
+		}
+		if (decided && body.choice !== 'approve') {
+			return { ok: false, status: 400, error: 'A decided answer goes with Approve.' };
+		}
 		const note = typeof body.note === 'string' ? body.note.trim() : '';
 		if (note.length > NOTE_MAX) {
 			return { ok: false, status: 413, error: `Notes are limited to ${NOTE_MAX} characters.` };
@@ -164,14 +187,15 @@ export class InboxService {
 		const choice = body.choice as InboxChoice;
 		let line: string | null = null;
 		// Approving a card with choices sends the picks (the recommended ones where none was made).
-		if (choice === 'approve' && card.choices) {
+		if (decided) line = decided;
+		else if (choice === 'approve' && card.choices) {
 			const p = picksLine(card.choices, picks ?? {});
 			if (!p.ok) return { ok: false, status: 400, error: p.error };
 			line = p.line;
 		}
 		const text = closing
 			? closeText(card, note || null)
-			: answerText(card, choice, note || null, line);
+			: answerText(card, choice, note || null, decided ? null : line, decided || null);
 		const valid = validateSend(requestId, text, card.taskId);
 		if (!valid.ok) return valid;
 		const sent = await messenger.send(valid.input);
@@ -189,7 +213,7 @@ export class InboxService {
 					question: card.choices?.intro || card.question,
 					askedAt: card.askedAt,
 					choice: closing ? 'close' : choice,
-					label: choiceLabel(card, closing ? 'close' : choice),
+					label: decided ? DECIDED_LABEL : choiceLabel(card, closing ? 'close' : choice),
 					picks: line,
 					note: note || null,
 					answeredAt: sent.message.submittedAt

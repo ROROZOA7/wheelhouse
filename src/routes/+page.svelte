@@ -13,6 +13,7 @@
 	import ResizableRail from '$lib/components/wh/ResizableRail.svelte';
 	import { homeLayout } from '$lib/client/layout.svelte';
 	import { composerBus } from '$lib/components/firstmate/bus.svelte';
+	import { openedDecisions } from '$lib/client/opened.svelte';
 	import { railInsights } from '$lib/client/insights.svelte';
 	import { replaceState } from '$app/navigation';
 
@@ -42,20 +43,31 @@
 
 	// `/?chat=<task id>` (a task page's "Ask Firstmate about this") starts a message mentioning it, once;
 	// `&draft=<text>` (or `/?draft=` alone) adds words after it, e.g. "I'd decide differently".
+	// `/?decision=<card id>` (a decision's Chat about this) brings that decision into the chat.
 	const mention = chatMention();
 	const takeDraft = chatDraft();
 	// Only once mounted: replaceState before the router starts throws and stops the page loading.
 	let mounted = $state(false);
+	// Taken once per arrival: replaceState leaves page.url as it was (see chatMention).
+	let decisionTaken: string | null = null;
 	$effect(() => {
 		if (!mounted) return;
 		const ref = mention(page.url, fleet);
 		const draft = takeDraft(page.url, fleet);
-		if (!ref && !draft) return;
+		const asked = page.url.searchParams.get('decision');
+		const decision = asked && page.url.href !== decisionTaken ? asked : null;
+		if (decision) decisionTaken = page.url.href;
+		if (!ref && !draft && !decision) return;
 		if (ref) composerBus.pending = ref;
 		if (draft) composerBus.draft = draft;
+		if (decision) {
+			openedDecisions.add(decision);
+			composerBus.decision = decision;
+		}
 		const url = new URL(page.url);
 		url.searchParams.delete('chat');
 		url.searchParams.delete('draft');
+		url.searchParams.delete('decision');
 		replaceState(url, {});
 	});
 

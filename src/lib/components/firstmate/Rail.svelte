@@ -44,7 +44,7 @@
 	import DecisionStack from '$lib/components/wh/inbox/DecisionStack.svelte';
 	import { inbox } from '$lib/client/inbox.svelte';
 	import { page } from '$app/state';
-	import type { InboxCard, InboxView } from '$lib/inbox';
+	import { escalated, type InboxCard, type InboxView } from '$lib/inbox';
 	import { showsChecks } from '$lib/checks';
 	import SlotContent from '$lib/components/wh/plugins/SlotContent.svelte';
 	import type { SlotEntry } from '$lib/plugins/types';
@@ -102,7 +102,9 @@
 	const seed = $derived(page.data.inbox as InboxView | undefined);
 	const inboxView = $derived(inbox.view(seed));
 	const decisions = $derived(
-		inboxView?.available ? inbox.shown(now, seed).shown.filter((c) => inScope(c.projectId)) : []
+		inboxView?.available
+			? inbox.shown(now, seed).shown.filter((c) => escalated(c) && inScope(c.projectId))
+			: []
 	);
 	const holdsOf = (cards: InboxCard[]) =>
 		new Set(cards.filter((c) => c.kind === 'hold').map((c) => c.taskId));

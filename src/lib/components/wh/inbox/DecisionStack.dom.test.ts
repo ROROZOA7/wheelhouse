@@ -86,8 +86,15 @@ const show = () => {
 };
 
 describe("On deck's Needs you decisions", () => {
-	it('shows a decision in the Decisions page box, its options to pick, and sends the picks', async () => {
-		inbox.value = view([hold()]);
+	it('shows only what Firstmate escalated, and agrees with its recommendation in one tap', async () => {
+		const theirs = hold({
+			id: 'demo-theme:theme-choice',
+			kind: 'decision',
+			key: 'theme-choice',
+			owner: 'firstmate',
+			question: 'Navy or slate?'
+		});
+		inbox.value = view([hold(), theirs]);
 		let reply: (r: Response) => void = () => {};
 		const posts: Record<string, unknown>[] = [];
 		vi.stubGlobal(
@@ -99,20 +106,18 @@ describe("On deck's Needs you decisions", () => {
 			})
 		);
 		show();
-		const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-		expect(radios.map((r) => [r.value, r.checked])).toEqual([
-			['1', true],
-			['2', false]
-		]);
-		expect(document.body.textContent).not.toContain('Pick options');
-		radios[1].click();
-		flushSync();
-		button('Send picks')!.click();
+		// A worker's decision is Firstmate's to settle: not in the captain's stack.
+		expect(document.querySelectorAll('article')).toHaveLength(1);
+		expect(document.body.textContent).not.toContain('Navy or slate?');
+		expect(document.querySelector('a[data-chat-about]')?.getAttribute('href')).toBe(
+			'/?decision=demo-gateway%3Acaptain-hold'
+		);
+		button('Agree: Discord')!.click();
 		flushSync();
 		// Gone from the list at once, before Firstmate has it.
 		expect(document.querySelector('article')).toBeNull();
 		expect(posts).toEqual([
-			{ cardId: 'demo-gateway:captain-hold', choice: 'approve', note: null, picks: { '1': '2' } }
+			{ cardId: 'demo-gateway:captain-hold', choice: 'approve', note: null, picks: { '1': '1' } }
 		]);
 		reply(new Response(JSON.stringify({ message: { delivery: 'delivered' } }), { status: 201 }));
 		await settle();
@@ -120,7 +125,13 @@ describe("On deck's Needs you decisions", () => {
 	});
 
 	it('keeps a decision whose answer was not taken, with the reason', async () => {
-		inbox.value = view([hold({ choices: null, options: optionsFor('hold') })]);
+		inbox.value = view([
+			hold({
+				choices: null,
+				options: optionsFor('hold'),
+				recommendation: { choice: 'approve', text: 'Ready.' }
+			})
+		]);
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(
@@ -131,7 +142,7 @@ describe("On deck's Needs you decisions", () => {
 			)
 		);
 		show();
-		button('Approve')!.click();
+		button('Agree: Go ahead')!.click();
 		await settle();
 		expect(document.querySelectorAll('article')).toHaveLength(1);
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe(

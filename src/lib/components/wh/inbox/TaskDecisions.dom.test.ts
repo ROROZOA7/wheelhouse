@@ -99,14 +99,14 @@ describe("the task page's decisions", () => {
 		flushSync();
 		expect(document.querySelectorAll('article')).toHaveLength(1);
 		expect(document.querySelector('article')!.id).toBe('card-upload:captain-hold');
-		const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-		expect(radios.map((r) => [r.value, r.checked])).toEqual([
-			['A', true],
-			['B', false]
-		]);
+		// Answered in the chat, or with one tap on Firstmate's recommendation.
+		expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+		expect(document.querySelector('a[data-chat-about]')?.getAttribute('href')).toBe(
+			'/?decision=upload%3Acaptain-hold'
+		);
 		// Looking at the task, there is no asking later.
 		const labels = [...document.querySelectorAll('button')].map((b) => b.textContent!.trim());
-		expect(labels).toEqual(['Evidence', 'Send picks', 'Fix', 'Skip']);
+		expect(labels).toEqual(['Evidence', 'Agree: A (flag)']);
 	});
 
 	it('takes an answered question away at once and says Firstmate has it', async () => {
@@ -124,11 +124,13 @@ describe("the task page's decisions", () => {
 		);
 		app = mount(TaskDecisions, { target: document.body, props: { task: held, now: Date.now() } });
 		flushSync();
-		[...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Skip')!.click();
+		document.querySelector<HTMLButtonElement>('[data-agree]')!.click();
 		flushSync();
 		expect(document.querySelector('article')).toBeNull();
 		await settle();
-		expect(posts).toEqual([{ cardId: 'upload:captain-hold', choice: 'skip', note: null }]);
+		expect(posts).toEqual([
+			{ cardId: 'upload:captain-hold', choice: 'approve', note: null, picks: { '1': 'A' } }
+		]);
 		expect(document.querySelector('article')).toBeNull();
 		expect(
 			document.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()

@@ -2,6 +2,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cardHref, optionsFor, SNOOZE_KEY, type InboxCard, type InboxView } from '$lib/inbox';
 import { inbox } from '$lib/client/inbox.svelte';
+import type { DecisionsView } from '$lib/types';
 
 const hold: InboxCard = {
 	id: 'upload:captain-hold',
@@ -48,6 +49,13 @@ const view: InboxView = {
 	cards: [first, hold]
 };
 
+const none: DecisionsView = {
+	schema: 'wheelhouse-decisions.v1',
+	available: true,
+	reason: null,
+	decisions: []
+};
+
 let app: ReturnType<typeof mount> | null = null;
 afterEach(() => {
 	if (app) unmount(app);
@@ -70,7 +78,7 @@ describe('the Decisions page', () => {
 		Element.prototype.scrollIntoView = () => {};
 		app = mount(Page, {
 			target: document.body,
-			props: { data: { inbox: view, sessionToken: 'tok' } } as never
+			props: { data: { inbox: view, sessionToken: 'tok', handled: none } } as never
 		});
 		flushSync();
 		await tick();
@@ -81,5 +89,105 @@ describe('the Decisions page', () => {
 		// Its evidence is open.
 		expect(card!.textContent).toContain('Flagged first keeps the old links working.');
 		expect(inbox.snoozed[hold.id]).toBeUndefined();
+	});
+
+	it('puts only what Firstmate escalated under Needs you, and the rest folded under Handled', async () => {
+		const review: InboxCard = {
+			...hold,
+			id: 'pr-tab:nm-run-review',
+			taskId: 'pr-tab',
+			taskTitle: 'Review tab',
+			kind: 'review',
+			key: 'nm-run-review',
+			owner: 'firstmate',
+			question: 'Unrequested component: the frame-ancestors setting is not in the spec.'
+		};
+		const made: DecisionsView = {
+			...none,
+			decisions: [
+				{
+					id: 'd1',
+					taskId: 'share',
+					taskTitle: 'Share links',
+					projectId: 'lumen',
+					step: 'review',
+					askedAt: new Date(Date.now() - 7_200_000).toISOString(),
+					decidedAt: new Date(Date.now() - 3_600_000).toISOString(),
+					verdict: 'Keep as is',
+					calls: [
+						{
+							question: 'Expired links: a friendly page or an error?',
+							detail: 'Expired tokens return 404.',
+							file: null,
+							serious: false,
+							verdict: 'Keep as is',
+							reason: 'People opening these links have no account.'
+						}
+					],
+					answerCut: false,
+					landed: false
+				}
+			]
+		};
+		const both = { ...view, cards: [hold, review] };
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify(both)))
+		);
+		Element.prototype.scrollIntoView = () => {};
+		app = mount(Page, {
+			target: document.body,
+			props: { data: { inbox: both, sessionToken: 'tok', handled: made } } as never
+		});
+		flushSync();
+		await tick();
+		flushSync();
+		const needs = document.querySelector('[aria-label="Questions for you"]')!;
+		expect(needs.querySelectorAll('article')).toHaveLength(1);
+		expect(needs.textContent).toContain('Ship the share links');
+		expect(document.body.textContent).not.toContain('Unrequested component');
+		const handled = document.querySelector<HTMLElement>('[data-handled]')!;
+		expect(handled.textContent).toMatch(/Handled by Firstmate\s*2/);
+		handled.querySelector<HTMLButtonElement>('button')!.click();
+		flushSync();
+		expect(handled.textContent).toContain('Unrequested component');
+		expect(handled.querySelector('a[data-chat-about]')?.getAttribute('href')).toBe(
+			'/?decision=pr-tab%3Anm-run-review'
+		);
+		expect(handled.textContent).toContain('Expired links: a friendly page or an error?');
+		expect(handled.textContent).toContain('Firstmate: Keep as is');
+	});
+
+	it('stays put when the captain agrees with a question Firstmate is settling', async () => {
+		// The link opens it under Handled by Firstmate; Needs you still has another question.
+		const settling: InboxCard = {
+			...hold,
+			owner: 'firstmate',
+			recommendation: { choice: 'approve', text: 'Flag it first.' }
+		};
+		const both = { ...view, cards: [first, settling] };
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify(both)))
+		);
+		const scrolled: string[] = [];
+		Element.prototype.scrollIntoView = function (this: Element) {
+			scrolled.push(this.id);
+		};
+		app = mount(Page, {
+			target: document.body,
+			props: { data: { inbox: both, sessionToken: 'tok', handled: none } } as never
+		});
+		flushSync();
+		await tick();
+		flushSync();
+		const handled = document.querySelector<HTMLElement>('[data-handled]')!;
+		const agree = handled.querySelector<HTMLButtonElement>('[data-agree]')!;
+		expect(agree).not.toBeNull();
+		scrolled.length = 0;
+		agree.click();
+		flushSync();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(scrolled).not.toContain('card-search:captain-hold');
 	});
 });

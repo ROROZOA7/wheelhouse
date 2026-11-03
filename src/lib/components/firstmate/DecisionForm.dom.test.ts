@@ -1,0 +1,118 @@
+import { flushSync, mount, unmount } from 'svelte';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cardForm, formIn, type FormAnswer } from '$lib/decisionform';
+import type { InboxChoices } from '$lib/inbox';
+import DecisionForm from './DecisionForm.svelte';
+
+let app: ReturnType<typeof mount> | null = null;
+afterEach(() => {
+	if (app) unmount(app);
+	app = null;
+	document.body.innerHTML = '';
+});
+
+const show = (form: ReturnType<typeof cardForm>, sent: [FormAnswer, string | null][]) => {
+	app = mount(DecisionForm, {
+		target: document.body,
+		props: { form, name: 'd1', onAnswer: (a: FormAnswer, n: string | null) => sent.push([a, n]) }
+	});
+	flushSync();
+};
+const button = (text: string) =>
+	[...document.querySelectorAll('button')].find((b) => b.textContent!.trim().startsWith(text))!;
+
+describe('DecisionForm', () => {
+	it('sends a plain answer with one tap, with a note when one was added', () => {
+		const sent: [FormAnswer, string | null][] = [];
+		show(cardForm({ kind: 'merge', choices: null, recommendation: null }), sent);
+		expect(button('Merge').textContent).toContain('recommended');
+		button('Add a note').click();
+		flushSync();
+		const note = document.querySelector('textarea')!;
+		note.value = 'After the release, please.';
+		note.dispatchEvent(new Event('input'));
+		button('Not yet').click();
+		expect(sent).toEqual([
+			[{ choice: 'skip', picks: null, decided: null }, 'After the release, please.']
+		]);
+	});
+
+	it('picks an option, the recommended one first, and decides', () => {
+		const sent: [FormAnswer, string | null][] = [];
+		show(
+			formIn(
+				'```decision-form\nWhich should ship?\n- Welcome page, tour behind a link (recommended)\n- Welcome page only\n- Three-step tour\n```'
+			)!,
+			sent
+		);
+		expect(document.body.textContent).toContain('Which should ship?');
+		const decide = document.querySelector<HTMLButtonElement>('[data-decide]')!;
+		expect(decide.textContent!.trim()).toBe('Decide: Welcome page, tour behind a link');
+		const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+		radios[2].click();
+		flushSync();
+		expect(decide.textContent!.trim()).toBe('Decide: Three-step tour');
+		decide.click();
+		expect(sent).toEqual([[{ choice: 'approve', picks: null, decided: 'Three-step tour' }, null]]);
+	});
+
+	const choices: InboxChoices = {
+		intro: 'Gateway design calls',
+		after: null,
+		calls: [
+			{
+				id: '1',
+				number: 1,
+				prompt: 'Approach',
+				required: true,
+				options: [
+					{ id: 'A', label: 'A', detail: 'core gateway', recommended: true },
+					{ id: 'C', label: 'C', detail: 'Claude Code channels only', recommended: false }
+				]
+			},
+			{
+				id: '2',
+				number: 2,
+				prompt: 'First channel',
+				required: true,
+				options: [
+					{ id: '1', label: 'Discord', detail: null, recommended: false },
+					{ id: '2', label: 'Telegram', detail: null, recommended: false }
+				]
+			}
+		]
+	};
+
+	it('keeps a card’s several calls, and decides once every call has a pick', () => {
+		const sent: [FormAnswer, string | null][] = [];
+		show(cardForm({ kind: 'hold', choices, recommendation: null }), sent);
+		const radios = [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+		expect(radios.map((r) => [r.value, r.checked])).toEqual([
+			['A', true],
+			['C', false],
+			['1', false],
+			['2', false]
+		]);
+		const decide = document.querySelector<HTMLButtonElement>('[data-decide]')!;
+		expect(decide.disabled).toBe(true);
+		expect(document.body.textContent).toContain('Pick one for 2) First channel to decide.');
+		radios[3].click();
+		flushSync();
+		expect(decide.disabled).toBe(false);
+		decide.click();
+		expect(sent).toEqual([[{ choice: 'approve', picks: { '2': '2' }, decided: null }, null]]);
+	});
+
+	it('takes a written answer', () => {
+		const sent: [FormAnswer, string | null][] = [];
+		show(formIn('```decision-form\nWhich browsers?\n- (written)\n```')!, sent);
+		const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
+		box.value = 'The last two years';
+		box.dispatchEvent(new Event('input'));
+		flushSync();
+		document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+		expect(sent).toEqual([
+			[{ choice: 'approve', picks: null, decided: 'The last two years' }, null]
+		]);
+	});
+});

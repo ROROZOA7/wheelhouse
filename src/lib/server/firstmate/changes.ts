@@ -3,6 +3,7 @@ import type { PrReviewState } from './approval';
 import type { LedgerStatus, LedgerTask } from './ledger';
 import { answerOf } from '../../inbox';
 import { FEEDBACK_PREFIX } from '../../preview';
+import { parseBatch } from '../../previewhelper';
 import type { BridgeMessage, ChangeRequest, TaskRun, TaskRuns } from '../../types';
 
 /**
@@ -95,6 +96,15 @@ export function wheelhouseRequest(
 ): Pick<ChangeRequest, 'kind' | 'text' | 'where'> | null {
 	if (FEEDBACK_PREFIX.test(m.text)) {
 		return { kind: 'preview', text: m.text.replace(FEEDBACK_PREFIX, '').trim(), where: null };
+	}
+	// A feedback list sent from the preview helper, one line per change.
+	const batch = parseBatch(m.text);
+	if (batch) {
+		return {
+			kind: 'preview',
+			text: batch.items.map((it, i) => `${i + 1}. ${it.text}`).join('\n'),
+			where: null
+		};
 	}
 	const note = reviewNoteOf(m.text);
 	if (note) return { kind: 'pr-review', text: note.text, where: note.where };
