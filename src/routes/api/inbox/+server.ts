@@ -5,12 +5,14 @@ import type { RequestHandler } from './$types';
 const headers = { 'cache-control': 'no-store' };
 const MAX_REQUEST_BYTES = 16 * 1024;
 
-/** Every open question: review findings, worker decisions, captain holds and merge calls. */
+/** Every open question: what Firstmate escalated (holds, merge calls, sign-offs) and what it is settling. */
 export const GET: RequestHandler = async () => json(await currentInbox(), { headers });
 
 /**
- * Answer one card: `{ cardId, choice: approve|fix|skip|close, note? }` with an
- * Idempotency-Key header. The answer goes to Firstmate as a message through
+ * Answer one card: `{ cardId, choice: approve|fix|skip|close, note?, picks?, decided? }`
+ * with an Idempotency-Key header. `picks` are the card's own options by call;
+ * `decided` is the words of an option Firstmate wrote in the chat (or a
+ * written answer), sent with Approve. The answer goes to Firstmate as a message through
  * `fm-inbox.sh note` (never to a worker directly); `close` asks Firstmate to
  * record the decision resolved on its key instead. Repeating the key returns
  * the original message. Origin and session token are checked in hooks.server.ts.
