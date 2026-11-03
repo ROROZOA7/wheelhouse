@@ -391,8 +391,7 @@
 					{#each parts.earlier as e, i (i)}
 						<li>
 							<details data-earlier>
-								<summary
-									class="cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+								<summary class="cursor-pointer text-xs text-muted-foreground hover:text-foreground"
 									>Earlier question: “{e.question}”</summary
 								>
 								<ul class="mt-2 flex flex-col gap-3 border-b border-hair/70 pb-3">
