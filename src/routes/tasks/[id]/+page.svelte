@@ -21,6 +21,8 @@
 	import LivePreview from '$lib/components/wh/LivePreview.svelte';
 	import OutputInspector from '$lib/components/wh/OutputInspector.svelte';
 	import PreviewStudio from '$lib/components/wh/PreviewStudio.svelte';
+	import PreviewHelper from '$lib/components/wh/PreviewHelper.svelte';
+	import type { Pointer } from '$lib/previewhelper';
 	import RawDetails from '$lib/components/wh/RawDetails.svelte';
 	import DocMentions from '$lib/components/wh/DocMentions.svelte';
 	import LinkedText from '$lib/components/wh/LinkedText.svelte';
@@ -88,6 +90,9 @@
 	/** The screenshot enlarged in the lightbox, and the file whose diff is open. */
 	let shotIndex = $state<number | null>(null);
 	let diffFile = $state<string | null>(null);
+	// The preview helper's Point, shared with the page beside it.
+	let pointing = $state(false);
+	let pointed = $state<{ pointer: Pointer; at: { x: number; y: number } } | null>(null);
 	let lastFetch = 0;
 	const id = $derived(page.params.id!);
 	const detail = $derived(fetched?.task.id === id ? fetched : data.detail);
@@ -991,16 +996,30 @@
 {/snippet}
 
 {#snippet previewPanel(task: TaskSummary)}
-	<!-- The worker's reported preview, embedded, with feedback that goes to the worker. -->
+	<!-- The worker's reported preview, embedded, beside a helper to talk it through before any
+	     feedback goes to the worker (work that has landed has no worker to send it to). -->
 	{#if task.preview}
 		<section aria-labelledby="live-preview">
 			<h2 id="live-preview" class="sr-only">Live preview</h2>
 			{#if active === 'preview' && !full}
-				<LivePreview
-					taskId={task.id}
-					feedback={task.status !== 'landed'}
-					onfullscreen={() => show('preview', true)}
-				/>
+				{@const talk = task.status !== 'landed'}
+				<div class="grid gap-4 {talk ? 'xl:grid-cols-[minmax(0,1fr)_24rem]' : ''}">
+					<LivePreview
+						taskId={task.id}
+						pointing={talk && pointing}
+						pin={pointed?.at ?? null}
+						onpoint={(p, at) => {
+							pointed = { pointer: p, at };
+							pointing = false;
+						}}
+						onfullscreen={() => show('preview', true)}
+					/>
+					{#if talk}
+						<div class="flex h-[70vh] min-h-80 flex-col xl:mt-[1.875rem]">
+							<PreviewHelper {task} url={task.preview.url} bind:pointing bind:attached={pointed} />
+						</div>
+					{/if}
+				</div>
 			{/if}
 		</section>
 	{/if}
@@ -1361,7 +1380,7 @@
 				taskId={task.id}
 				title={task.title}
 				url={task.preview.url}
-				feedback={task.status !== 'landed'}
+				talk={task.status !== 'landed'}
 				onclose={() => show('preview')}
 			/>
 		{/if}

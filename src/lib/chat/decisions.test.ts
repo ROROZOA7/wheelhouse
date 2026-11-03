@@ -67,6 +67,19 @@ const sent = (requestId: string, min: number): NonNullable<InboxCard['sent']> =>
 });
 
 describe('chatDecisions', () => {
+	it('shows a question Firstmate is settling only once it is opened here or answered', () => {
+		const mine = card('a:x', 1);
+		const theirs = card('b:review', 2, { owner: 'firstmate', kind: 'review' });
+		const taken = card('c:y', 3, { owner: 'firstmate', sent: sent('r9', 4) });
+		const ids = (ds: ChatDecision[]) => ds.map((d) => d.id);
+		expect(ids(chatDecisions([mine, theirs, taken], [], {}))).toEqual(['a:x', 'c:y']);
+		expect(ids(chatDecisions([mine, theirs, taken], [], {}, new Set(['b:review'])))).toEqual([
+			'a:x',
+			'b:review',
+			'c:y'
+		]);
+	});
+
 	it('shows an open card open, and folds one answered here, one sent, and one answered before', () => {
 		const open = card('a:k', 1);
 		const mine = card('b:k', 2);

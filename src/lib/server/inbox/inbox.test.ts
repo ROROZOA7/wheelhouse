@@ -439,7 +439,9 @@ describe('buildInbox', () => {
 			detail: 'Firstmate did not take the message: exit 1'
 		});
 		expect(awaitsAnswer(failed)).toBe(true);
-		expect(openCount([failed], {}, Date.now())).toBe(1);
+		// A worker's decision is Firstmate's to settle: it waits, but not in the captain's count.
+		expect(openCount([failed], {}, Date.now())).toBe(0);
+		expect(openCount([{ ...failed, owner: 'captain' }], {}, Date.now())).toBe(1);
 	});
 });
 

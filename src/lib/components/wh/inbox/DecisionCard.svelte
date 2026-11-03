@@ -1,56 +1,37 @@
 <script lang="ts">
 	/**
-	 * One open question in the decision inbox: the project and task, the question
-	 * in plain words, Firstmate's recommendation when one is recorded, the evidence
-	 * (findings, the pull request, preview, screenshots) and one-tap answers.
-	 * The same box answers a question on the Decisions page, in On deck and on
-	 * the task page. The answer is sent by the parent (onAnswer), which goes to
-	 * Firstmate, never to the worker directly. Close (onClose) takes a question
-	 * Firstmate keeps under a decision key off the stack without an answer, and
-	 * Ask me later (onLater) is offered where the parent passes it.
-	 * `shortcuts` shows each answer's key, where the page binds the keys.
-	 *
-	 * A question whose text names its options (card.choices) shows each call as
-	 * a set of choices, the recommended one picked; Approve then sends the picks
-	 * (bound as `picks`). `extra` adds actions at the end of the answer row (the
-	 * chat's Discuss).
+	 * One open question outside the chat (the Decisions page, On deck, the task
+	 * page): the project and task, the question in plain words, Firstmate's
+	 * recommendation when one is recorded, and what it rests on (Evidence).
+	 * The question is answered in the Firstmate chat, where Chat about this
+	 * opens it with the form that fits it and room to talk it through; Agree
+	 * sends Firstmate's recommendation from here with one tap. Every answer
+	 * goes to Firstmate (the parent sends it, onAgree), never to a worker
+	 * directly. Close (onClose) takes a question Firstmate keeps under a
+	 * decision key off the stack without an answer, and Ask me later (onLater)
+	 * is offered where the parent passes it. `shortcuts` shows each action's
+	 * key, where the page binds the keys.
 	 */
 	import {
-		ChevronDown,
+		Check,
 		Clock,
 		Compass,
 		ExternalLink,
-		FileText,
 		GitPullRequest,
-		Hammer,
 		Hand,
+		MessageSquare,
 		MonitorPlay,
 		OctagonAlert,
 		Scale,
-		SkipForward,
-		ThumbsUp,
 		X
 	} from '@lucide/svelte';
 	import { ago } from '$lib/format';
 	import { pullRequests } from '$lib/client/pullrequests';
-	import { markdown } from '$lib/chat/markdown';
-	import {
-		WRITTEN_MAX,
-		callName,
-		callRef,
-		choiceLabel,
-		closable,
-		resolvePicks,
-		unpicked,
-		type InboxCall,
-		type InboxCard,
-		type InboxChoice,
-		type InboxKind,
-		type Picks
-	} from '$lib/inbox';
-	import type { Snippet } from 'svelte';
+	import { cardForm, optionName, recommendedOption } from '$lib/decisionform';
+	import { decisionHref } from '$lib/handled';
+	import { choiceLabel, closable, type InboxCard, type InboxKind } from '$lib/inbox';
 	import LinkedText from '$lib/components/wh/LinkedText.svelte';
-	import { docHref } from '$lib/docpath';
+	import DecisionEvidence from './DecisionEvidence.svelte';
 
 	let {
 		card,
@@ -60,15 +41,12 @@
 		shortcuts = false,
 		canAnswer = true,
 		error = null,
-		note = $bindable(''),
-		picks = $bindable({}),
 		now,
-		onAnswer,
+		onAgree,
 		onLater,
 		onClose,
 		onToggle,
-		onFocus,
-		extra
+		onFocus
 	}: {
 		card: InboxCard;
 		project?: string | null;
@@ -77,15 +55,13 @@
 		shortcuts?: boolean;
 		canAnswer?: boolean;
 		error?: string | null;
-		note?: string;
-		picks?: Picks;
 		now: number;
-		onAnswer: (choice: InboxChoice) => void;
+		/** Send Firstmate's recommendation, as the form's recommended option. */
+		onAgree: () => void;
 		onLater?: () => void;
 		onClose?: () => void;
 		onToggle?: () => void;
 		onFocus?: () => void;
-		extra?: Snippet;
 	} = $props();
 
 	const KIND: Record<InboxKind, { label: string; icon: typeof Hand }> = {
@@ -96,71 +72,33 @@
 		merge: { label: 'Merge call', icon: GitPullRequest },
 		preview: { label: 'Preview sign-off', icon: MonitorPlay }
 	};
-	const ICON: Record<InboxChoice, typeof Hand> = {
-		approve: ThumbsUp,
-		fix: Hammer,
-		skip: SkipForward
-	};
-	const KEY: Record<InboxChoice, string> = { approve: 'a', fix: 'f', skip: 's' };
 
 	const kind = $derived(KIND[card.kind]);
+	const mine = $derived(card.owner === 'captain');
 	const rec = $derived(card.recommendation);
-	const ev = $derived(card.evidence);
 	const href = $derived(`/tasks/${encodeURIComponent(card.taskId)}`);
+	const chatHref = $derived(decisionHref(card.id));
 	// Review opens the PR in a plugin's review tab while one is on for the project, else on GitHub.
-	const prLink = $derived(ev.pr ? pullRequests.review(card.projectId, ev.pr) : null);
-	const meaning = (c: InboxChoice) => card.options.find((o) => o.choice === c)?.meaning ?? '';
-	const canClose = $derived(!!onClose && closable(card));
-	const CLOSE_MEANING = 'No answer needed: Firstmate records it closed.';
-	const choices = $derived(card.choices);
-	const heading = $derived(choices?.intro || card.question);
-	const chosen = $derived(choices ? resolvePicks(choices, picks) : {});
-	const missing = $derived(choices ? unpicked(choices, picks) : []);
-	/** Short options sit in a row; longer ones stack. */
-	const inRow = (call: InboxCall) => call.options.every((o) => !o.detail && o.label.length <= 28);
-	const pick = (call: InboxCall, value: string) => (picks = { ...picks, [call.id]: value });
-	const hasEvidence = $derived(
-		!!(
-			ev.text ||
-			ev.findings.length ||
-			ev.pr ||
-			ev.preview ||
-			ev.screenshots.length ||
-			ev.file ||
-			choices
-		)
+	const prLink = $derived(
+		card.evidence.pr ? pullRequests.review(card.projectId, card.evidence.pr) : null
 	);
-
-	/** The report the question names, read on demand. */
-	let report = $state<{ open: boolean; text: string | null; error: string | null }>({
-		open: false,
-		text: null,
-		error: null
-	});
-	async function toggleReport() {
-		report.open = !report.open;
-		const url = ev.report?.url;
-		if (!report.open || report.text !== null || !url) return;
-		try {
-			const r = await fetch(url);
-			if (!r.ok) throw new Error();
-			report.text = await r.text();
-			report.error = null;
-		} catch {
-			report.error = 'The report could not be read.';
-		}
-	}
+	const canClose = $derived(!!onClose && closable(card));
+	const heading = $derived(card.choices?.intro || card.question);
+	const agree = $derived(recommendedOption(cardForm(card)));
+	const agreeName = $derived(agree ? optionName(agree) : '');
+	const kbd =
+		'ml-0.5 hidden rounded border border-current/30 px-1 font-mono text-[0.7rem] leading-4 opacity-70 sm:inline';
 </script>
 
 <article
 	id="card-{card.id}"
-	class="scroll-mt-24 rounded-lg border border-l-[3px] bg-card text-card-foreground transition-shadow {card.owner ===
-	'captain'
+	class="scroll-mt-24 rounded-lg border border-l-[3px] bg-card text-card-foreground transition-shadow {mine
 		? 'border-l-sea'
 		: 'border-l-brass'} {active ? 'shadow-[0_0_0_2px_var(--ring)]' : ''} px-4 pt-3.5 pb-3 sm:px-5"
 	aria-current={active ? 'true' : undefined}
 	onfocusin={onFocus}
 	onpointerdown={onFocus}
+	data-decision-card={card.owner}
 >
 	<header class="flex flex-wrap items-center gap-x-2 gap-y-1">
 		{#if project}
@@ -170,16 +108,13 @@
 			>
 		{/if}
 		<span
-			class="flex items-center gap-1 rounded px-1.5 text-xs leading-[1.15rem] font-medium {card.owner ===
-			'captain'
+			class="flex items-center gap-1 rounded px-1.5 text-xs leading-[1.15rem] font-medium {mine
 				? 'bg-sea/10 text-sea'
 				: 'bg-muted text-foreground/80'}"
 			><kind.icon class="size-3" aria-hidden="true" />{kind.label}</span
 		>
 		<span class="text-xs text-muted-foreground"
-			>{card.owner === 'captain'
-				? 'Waiting on you'
-				: 'With Firstmate; yours to call if you want'}</span
+			>{mine ? 'Waiting on you' : 'Firstmate is handling it; yours to take over if you want'}</span
 		>
 		{#if card.askedAt}
 			<span class="ml-auto text-xs text-muted-foreground tabular-nums"
@@ -195,261 +130,44 @@
 		>{card.taskTitle}</a
 	>
 
-	{#if ev.report}
-		<div class="mt-2 text-xs">
-			{#if ev.report.url}
-				<button
-					class="inline-flex cursor-pointer items-center gap-1 text-sea hover:underline"
-					aria-expanded={report.open}
-					onclick={toggleReport}
-					><FileText class="size-3.5 shrink-0" aria-hidden="true" />{report.open
-						? 'Hide the report'
-						: 'Read the report'}<span class="ml-1 font-mono break-all text-muted-foreground"
-						>{ev.report.path}</span
-					></button
-				>
-				<a
-					href={docHref(ev.report.path)}
-					class="ml-2 text-sea underline-offset-2 hover:underline"
-					data-doc-link>Open in the reader</a
-				>
-			{:else}
-				<span class="inline-flex items-center gap-1 text-muted-foreground"
-					><FileText class="size-3.5 shrink-0" aria-hidden="true" />Report
-					<span class="font-mono break-all">{ev.report.path}</span> (not found)</span
-				>
-			{/if}
-			{#if report.open}
-				<div
-					class="mt-2 max-h-[28rem] overflow-y-auto rounded-md border bg-background/60 px-3 py-2 text-sm"
-				>
-					{#if report.error}
-						<p class="text-danger" role="alert">{report.error}</p>
-					{:else if report.text === null}
-						<p class="text-muted-foreground">Reading the report…</p>
-					{:else}
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
-						<div class="chat-md">{@html markdown(report.text)}</div>
-					{/if}
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if rec}
+	{#if rec || agree}
 		<p class="mt-2.5 border-l-2 border-brass pl-2.5 text-sm leading-snug">
-			<span class="font-medium"
-				>Firstmate recommends{rec.choice ? `: ${choiceLabel(card, rec.choice)}` : ''}</span
-			><span class="text-muted-foreground"> · <LinkedText text={rec.text} /></span>
+			<span class="font-medium">Firstmate recommends{agree ? `: ${agreeName}` : ''}</span
+			>{#if rec}<span class="text-muted-foreground"> · <LinkedText text={rec.text} /></span>{/if}
 		</p>
 	{/if}
 
-	{#if hasEvidence}
-		<button
-			class="mt-3 flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-			aria-expanded={expanded}
-			onclick={onToggle}
-			>Evidence<ChevronDown
-				class="size-3.5 transition-transform {expanded ? 'rotate-180' : ''}"
-				aria-hidden="true"
-			/>{#if !expanded}<span class="font-normal"
-					>{ev.findings.length
-						? ` · ${ev.findings.length} ${ev.findings.length === 1 ? 'finding' : 'findings'}`
-						: ''}{ev.pr ? ' · pull request' : ''}{ev.preview ? ' · preview' : ''}{ev.screenshots
-						.length
-						? ` · ${ev.screenshots.length} ${ev.screenshots.length === 1 ? 'screenshot' : 'screenshots'}`
-						: ''}</span
-				>{/if}</button
-		>
-		{#if expanded}
-			<div class="mt-2 space-y-3 rounded-md border bg-background/60 p-3 text-sm">
-				{#if ev.findings.length}
-					<ol class="space-y-2.5">
-						{#each ev.findings as f (f.id)}
-							<li>
-								<p class="leading-snug">
-									{#if f.serious}<span
-											class="mr-1.5 rounded bg-danger/10 px-1 text-xs font-medium text-danger"
-											>Serious</span
-										>{/if}<LinkedText text={f.summary} />
-								</p>
-								{#if f.where}<p class="mt-0.5 font-mono text-xs text-muted-foreground">
-										{f.where}
-									</p>{/if}
-								{#if f.detail}<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-										<LinkedText text={f.detail} />
-									</p>{/if}
-							</li>
-						{/each}
-					</ol>
-				{/if}
-				{#if choices}
-					<div>
-						<p class="text-xs font-medium text-muted-foreground">As Firstmate wrote it</p>
-						<p class="mt-0.5 leading-relaxed text-muted-foreground">
-							<LinkedText text={card.question} />
-						</p>
-					</div>
-				{/if}
-				{#if ev.text}<p class="leading-relaxed whitespace-pre-line text-muted-foreground">
-						<LinkedText text={ev.text} />
-					</p>{/if}
-				{#if ev.pr || ev.preview || ev.file}
-					<ul class="flex flex-col gap-1 text-xs">
-						{#if ev.pr}
-							<li>
-								<a
-									href={ev.pr.url}
-									target="_blank"
-									rel="noreferrer"
-									class="inline-flex items-center gap-1 break-all text-sea hover:underline"
-									><GitPullRequest class="size-3.5 shrink-0" aria-hidden="true" />{ev.pr.url}</a
-								>{#if ev.checks}<span class="ml-1.5 text-muted-foreground"
-										>· checks {ev.checks}</span
-									>{/if}
-							</li>
-						{/if}
-						{#if ev.preview}
-							<li>
-								<a
-									href="{href}?tab=preview"
-									class="inline-flex items-center gap-1 text-sea hover:underline"
-									><MonitorPlay class="size-3.5 shrink-0" aria-hidden="true" />Open in the task's
-									preview</a
-								>
-							</li>
-							<li>
-								<a
-									href={ev.preview}
-									target="_blank"
-									rel="noreferrer"
-									class="inline-flex items-center gap-1 break-all text-sea hover:underline"
-									><ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />{ev.preview}</a
-								>
-							</li>
-						{/if}
-						{#if ev.file}
-							<li class="inline-flex items-center gap-1 text-muted-foreground">
-								<FileText class="size-3.5 shrink-0" aria-hidden="true" />Findings file
-								<span class="font-mono break-all">{ev.file}</span>
-							</li>
-						{/if}
-					</ul>
-				{/if}
-				{#if ev.screenshots.length}
-					<ul class="flex flex-wrap gap-2">
-						{#each ev.screenshots as s (s.url)}
-							<li>
-								<a href={s.url} target="_blank" rel="noreferrer" class="block">
-									<img
-										src={s.url}
-										alt={s.name}
-										class="h-20 w-32 rounded border object-cover object-top"
-										loading="lazy"
-									/>
-								</a>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
-		{/if}
-	{/if}
+	<DecisionEvidence {card} {expanded} {onToggle} />
 
 	{#if card.sent?.delivery === 'failed' && !error}
 		<p class="mt-3 text-sm text-danger" role="alert">
-			Not delivered to Firstmate: {choiceLabel(card, card.sent.choice)}. {card.sent.detail ??
-				'Try again.'}
+			Not delivered to Firstmate: {card.sent.picks ?? choiceLabel(card, card.sent.choice)}. {card
+				.sent.detail ?? 'Try again.'}
 		</p>
 	{/if}
 
-	{#if choices}
-		<div class="mt-3 flex flex-col gap-3" role="group" aria-label="Your picks">
-			{#each choices.calls as call (call.id)}
-				<fieldset class="min-w-0">
-					<legend class="text-sm leading-snug font-medium">
-						{#if call.number !== null}<span class="mr-1 text-muted-foreground tabular-nums"
-								>{call.number}.</span
-							>{/if}{call.prompt ?? 'Pick one'}{#if !call.required}<span
-								class="ml-1 font-normal text-muted-foreground"
-							>
-								· optional</span
-							>{/if}
-					</legend>
-					{#if call.options.length}
-						<div class="mt-1.5 flex gap-1.5 {inRow(call) ? 'flex-wrap' : 'flex-col'}">
-							{#each call.options as o (o.id)}
-								<label
-									class="flex min-w-0 cursor-pointer items-start gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors hover:bg-accent has-[:checked]:border-sea has-[:checked]:bg-sea/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
-								>
-									<input
-										type="radio"
-										name="pick-{card.id}-{call.id}"
-										value={o.id}
-										checked={chosen[call.id] === o.id}
-										disabled={!canAnswer}
-										onchange={() => pick(call, o.id)}
-										class="mt-[0.2rem] shrink-0 accent-sea"
-									/>
-									<span class="min-w-0 leading-snug"
-										>{#if o.detail}<span class="font-semibold">{o.label}</span><span
-												class="text-foreground/85">{` · ${o.detail}`}</span
-											>{:else}{o.label}{/if}{#if o.recommended}<span
-												class="ml-1.5 text-xs font-medium whitespace-nowrap text-brass"
-												>Recommended</span
-											>{/if}</span
-									>
-								</label>
-							{/each}
-						</div>
-					{:else}
-						<input
-							type="text"
-							value={picks[call.id] ?? ''}
-							maxlength={WRITTEN_MAX}
-							disabled={!canAnswer}
-							placeholder="Your answer (optional)"
-							aria-label="Your answer to {callName(call) || 'this call'}"
-							oninput={(e) => pick(call, e.currentTarget.value)}
-							class="mt-1.5 block h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-						/>
-					{/if}
-				</fieldset>
-			{/each}
-			{#if choices.after}
-				<p class="text-xs leading-relaxed text-muted-foreground">
-					<LinkedText text={choices.after} />
-				</p>
-			{/if}
-		</div>
-	{/if}
-	<label class="mt-3 block">
-		<span class="sr-only">Note for Firstmate (optional)</span>
-		<textarea
-			bind:value={note}
-			rows="1"
-			maxlength="2000"
-			placeholder="Add a note for Firstmate (optional)"
-			class="block field-sizing-content max-h-40 min-h-9 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-		></textarea>
-	</label>
-	<div class="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label="Answer">
-		{#each card.options as o (o.choice)}
-			{@const Icon = ICON[o.choice]}
-			{@const recommended = choices ? o.choice === 'approve' : rec?.choice === o.choice}
+	<div class="mt-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Answer">
+		<a
+			href={chatHref}
+			class="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-sea bg-sea px-3 text-sm font-medium text-white transition-colors hover:bg-sea/90 sm:min-h-9 dark:text-slate-950"
+			title="Open it in the Firstmate chat, with the form that fits it and room to talk it through"
+			data-chat-about
+			><MessageSquare class="size-3.5" aria-hidden="true" />Chat about this{#if shortcuts}<kbd
+					class={kbd}>Enter</kbd
+				>{/if}</a
+		>
+		{#if agree}
 			<button
-				class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 {recommended
-					? 'border-sea bg-sea text-white hover:bg-sea/90 dark:text-slate-950'
-					: 'bg-background hover:bg-accent'}"
-				disabled={!canAnswer || (o.choice === 'approve' && missing.length > 0)}
-				title={o.meaning}
-				onclick={() => onAnswer(o.choice)}
-				><Icon class="size-3.5" aria-hidden="true" />{o.label}{#if shortcuts}<kbd
-						class="ml-0.5 hidden rounded border border-current/30 px-1 font-mono text-[0.7rem] leading-4 opacity-70 sm:inline"
-						>{KEY[o.choice]}</kbd
+				class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
+				disabled={!canAnswer}
+				title="Send Firstmate's recommendation: {agreeName}"
+				onclick={onAgree}
+				data-agree
+				><Check class="size-3.5" aria-hidden="true" />Agree: {agreeName}{#if shortcuts}<kbd
+						class={kbd}>a</kbd
 					>{/if}</button
 			>
-		{/each}
+		{/if}
 		{#if prLink}
 			<a
 				class="inline-flex min-h-10 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-accent sm:min-h-9"
@@ -468,8 +186,7 @@
 			<button
 				class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:min-h-9"
 				onclick={onLater}
-				><Clock class="size-3.5" aria-hidden="true" />Ask me later{#if shortcuts}<kbd
-						class="ml-0.5 hidden rounded border border-current/30 px-1 font-mono text-[0.7rem] leading-4 opacity-70 sm:inline"
+				><Clock class="size-3.5" aria-hidden="true" />Ask me later{#if shortcuts}<kbd class={kbd}
 						>l</kbd
 					>{/if}</button
 			>
@@ -478,30 +195,13 @@
 			<button
 				class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
 				disabled={!canAnswer}
-				title={CLOSE_MEANING}
+				title="No answer needed: Firstmate records it closed."
 				onclick={onClose}
-				><X class="size-3.5" aria-hidden="true" />Close{#if shortcuts}<kbd
-						class="ml-0.5 hidden rounded border border-current/30 px-1 font-mono text-[0.7rem] leading-4 opacity-70 sm:inline"
-						>c</kbd
+				><X class="size-3.5" aria-hidden="true" />Close{#if shortcuts}<kbd class={kbd}>c</kbd
 					>{/if}</button
 			>
 		{/if}
-		{@render extra?.()}
 	</div>
-	{#if choices && missing.length}
-		<p class="mt-1.5 text-xs text-muted-foreground">
-			Pick one for {missing.map(callRef).join(', ')} to send your picks.
-		</p>
-	{/if}
-	{#if active}
-		<p class="mt-1.5 text-xs text-muted-foreground">
-			{#each card.options as o, i (o.choice)}{i ? ' · ' : ''}<span class="font-medium"
-					>{o.label}</span
-				>: {meaning(o.choice)}{/each}{canClose ? ' · ' : ''}{#if canClose}<span class="font-medium"
-					>Close</span
-				>: {CLOSE_MEANING}{/if}
-		</p>
-	{/if}
 	{#if error}
 		<p class="mt-2 text-sm text-danger" role="alert">{error}</p>
 	{/if}

@@ -2,13 +2,18 @@
  * Discussing a decision in the chat: the captain asks Firstmate about an open
  * question (or one already answered) from under its card. Firstmate only
  * receives text, so the question reaches it as an ordinary chat message that
- * starts with a one-line Markdown quote naming the task, the decision key and
- * the question, then a blank line, then the captain's words:
+ * starts with a Markdown quote naming the task, the decision key and the
+ * question, with a second line telling Firstmate how to change the form the
+ * captain answers with, then a blank line, then the captain's words:
  *
  *     > About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”
+ *     > Wheelhouse: if your reply changes what the captain should choose from, end it with a decision-form block …
  *
  *     What's the risk?
  *
+ * A `decision-form` block in Firstmate's reply replaces the decision's form
+ * (lib/decisionform.ts). Messages from before the second line was added read
+ * back the same way.
  * The chat reads that form back from the transcript and shows the message, and
  * the turn Firstmate answers it with, in the thread under the decision's card
  * instead of in the conversation. Pure, so it is unit-tested.
@@ -41,7 +46,11 @@ export interface Thread {
 
 const SLUG = /^[^\s()]+$/;
 const QUOTED =
-	/^> About the decision on ([^\s()]+) \(key ([^\s()]+)\), not an answer yet: “(.*)”\n\n([\s\S]+)$/;
+	/^> About the decision on ([^\s()]+) \(key ([^\s()]+)\), not an answer yet: “(.*)”\n(?:> [^\n]*\n)*\n([\s\S]+)$/;
+
+/** How Firstmate changes the form the captain answers with, carried in every discussion message. */
+export const FORM_HINT =
+	'> Wheelhouse: if your reply changes what the captain should choose from, end it with a ```decision-form block: the question on its first line, then one "- option" line each ("- label: what it means", "(recommended)" on the one you recommend), or "- (written)" for a written answer. Wheelhouse shows it as the form the captain answers with.';
 
 export const cardIdOf = (ref: Pick<DiscussRef, 'taskId' | 'key'>) => `${ref.taskId}:${ref.key}`;
 
@@ -53,7 +62,7 @@ export const canDiscuss = (ref: Pick<DiscussRef, 'taskId' | 'key'>) =>
 export function discussText(ref: DiscussRef, body: string): string {
 	const words = body.trim();
 	if (!words || !canDiscuss(ref)) return '';
-	return `> About the decision on ${ref.taskId} (key ${ref.key}), not an answer yet: “${snippetOf(ref.question)}”\n\n${words}`;
+	return `> About the decision on ${ref.taskId} (key ${ref.key}), not an answer yet: “${snippetOf(ref.question)}”\n${FORM_HINT}\n\n${words}`;
 }
 
 /** A sent message back as the decision it is about and the captain's words; null when it is not one. */

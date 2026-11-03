@@ -6,7 +6,7 @@ import { FakeEngine } from '$lib/voice/fake-engine';
 
 vi.mock('$app/state', () => ({ page: { data: { sessionToken: 't' } } }));
 
-const { default: PreviewFeedback } = await import('./PreviewFeedback.svelte');
+const { default: PreviewHelper } = await import('./PreviewHelper.svelte');
 
 let engine: FakeEngine;
 
@@ -22,14 +22,16 @@ afterEach(() => {
 });
 
 describe('dictating into a textarea', () => {
-	it('fills the preview feedback box, which can then be sent by hand', () => {
-		const app = mount(PreviewFeedback, {
+	it('fills the preview helper’s message box, which can then be sent by hand', () => {
+		const app = mount(PreviewHelper, {
 			target: document.body,
-			props: { taskId: 'task-1', url: 'http://127.0.0.1:4000/' }
+			props: { task: { id: 'task-1', shortTitle: 'Task' }, url: 'http://127.0.0.1:4000/' }
 		});
 		flushSync();
-		const box = document.querySelector('textarea')!;
-		const submit = document.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+		const box = document.querySelector<HTMLTextAreaElement>(
+			'textarea[aria-label="Talk about this preview"]'
+		)!;
+		const submit = document.querySelector<HTMLButtonElement>('button[aria-label="Say it"]')!;
 		expect(submit.disabled).toBe(true);
 
 		document.querySelector<HTMLButtonElement>('button[aria-label="Dictate"]')!.click();

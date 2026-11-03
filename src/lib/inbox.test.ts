@@ -4,6 +4,7 @@ import {
 	answerText,
 	closable,
 	closeText,
+	escalated,
 	keyAction,
 	openCount,
 	optionsFor,
@@ -236,10 +237,11 @@ describe('ask me later', () => {
 	});
 
 	it('hides snoozed cards and counts only unanswered ones', () => {
-		const a = card({ id: 'a' });
-		const b = card({ id: 'b' });
+		const a = card({ id: 'a', owner: 'captain' });
+		const b = card({ id: 'b', owner: 'captain' });
 		const c = card({
 			id: 'c',
+			owner: 'captain',
 			sent: {
 				choice: 'fix',
 				picks: null,
@@ -259,18 +261,26 @@ describe('ask me later', () => {
 		expect(openCount([a, b, c], { b: now + 1 }, now)).toBe(1);
 		expect(openCount([a, b, c], { b: now - 1 }, now)).toBe(2);
 	});
+
+	it('counts only what Firstmate escalated to the captain', () => {
+		const mine = card({ id: 'mine', owner: 'captain' });
+		const theirs = card({ id: 'theirs', owner: 'firstmate' });
+		expect(escalated(mine)).toBe(true);
+		expect(escalated(theirs)).toBe(false);
+		expect(openCount([mine, theirs], {}, now)).toBe(1);
+	});
 });
 
 describe('keyboard', () => {
-	it('maps j/k, a/f/s, l, c and Enter', () => {
+	it('maps j/k, a, Enter, e, l and c', () => {
 		expect(keyAction('j')).toEqual({ do: 'move', by: 1 });
 		expect(keyAction('k')).toEqual({ do: 'move', by: -1 });
-		expect(keyAction('a')).toEqual({ do: 'answer', choice: 'approve' });
-		expect(keyAction('f')).toEqual({ do: 'answer', choice: 'fix' });
-		expect(keyAction('s')).toEqual({ do: 'answer', choice: 'skip' });
+		expect(keyAction('a')).toEqual({ do: 'agree' });
+		expect(keyAction('Enter')).toEqual({ do: 'chat' });
+		expect(keyAction('e')).toEqual({ do: 'evidence' });
 		expect(keyAction('l')).toEqual({ do: 'later' });
 		expect(keyAction('c')).toEqual({ do: 'close' });
-		expect(keyAction('Enter')).toEqual({ do: 'evidence' });
+		expect(keyAction('f')).toBeNull();
 		expect(keyAction('x')).toBeNull();
 	});
 });

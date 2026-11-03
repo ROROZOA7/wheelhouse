@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discussText, parseDiscuss, pendingThreads, threads } from './discuss';
+import { FORM_HINT, discussText, parseDiscuss, pendingThreads, threads } from './discuss';
 import type { Item, Part } from './fold';
 import type { Pending } from './outbox';
 
@@ -37,9 +37,15 @@ describe('discussText and parseDiscuss', () => {
 	it('quotes the task, key and question before the words, and reads them back', () => {
 		const t = discussText(REF, '  What’s the risk?  ');
 		expect(t).toBe(
-			'> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n\nWhat’s the risk?'
+			`> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n${FORM_HINT}\n\nWhat’s the risk?`
 		);
 		expect(parseDiscuss(t)).toEqual({ cardId: 'lumen-pricing:layout', body: 'What’s the risk?' });
+		// Messages sent before the form hint read back the same way.
+		expect(
+			parseDiscuss(
+				'> About the decision on lumen-pricing (key layout), not an answer yet: “Which pricing layout should ship?”\n\nWhat’s the risk?'
+			)
+		).toEqual({ cardId: 'lumen-pricing:layout', body: 'What’s the risk?' });
 	});
 
 	it('sends nothing without words, or for a task or key it could not read back', () => {

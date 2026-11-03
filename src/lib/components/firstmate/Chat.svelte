@@ -42,7 +42,9 @@
 	import { act, firstmateChat } from '$lib/client/chat.svelte';
 	import { enterFullscreen, leaveFullscreen } from '$lib/client/fullscreen.svelte';
 	import { inbox } from '$lib/client/inbox.svelte';
-	import { currentHealth } from '$lib/client/live.svelte';
+	import { openedDecisions } from '$lib/client/opened.svelte';
+	import { composerBus } from './bus.svelte';
+	import { currentHealth, currentMessages } from '$lib/client/live.svelte';
 	import { ago } from '$lib/format';
 	import type { InboxView } from '$lib/inbox';
 	import type { Project, TaskSummary } from '$lib/types';
@@ -54,6 +56,8 @@
 	import Avatar from './Avatar.svelte';
 	import ChatApp from './ChatApp.svelte';
 	import ChatDecisionCard from './ChatDecision.svelte';
+	import FeedbackBatch from './FeedbackBatch.svelte';
+	import { chatBatches, placeBatches } from '$lib/chat/batches';
 	import ChatPreview from './ChatPreview.svelte';
 	import Composer from './Composer.svelte';
 	import MenuCard from './MenuCard.svelte';
@@ -158,12 +162,30 @@
 
 	// Decisions, from the live inbox (the page's own until it is read), each at the time it was asked.
 	const inboxView = $derived(inbox.view(page.data.inbox as InboxView | undefined));
+	// A question Firstmate is settling itself shows once the captain opened it here or talked about it.
+	$effect(() => openedDecisions.load());
+	const opened = $derived(
+		new Set([
+			...openedDecisions.ids,
+			...(composerBus.decision ? [composerBus.decision] : []),
+			...items.flatMap((it) => {
+				const d = it.kind === 'user' ? parseDiscuss(it.text) : null;
+				return d ? [d.cardId] : [];
+			}),
+			...firstmateChat.pending.flatMap((p) => {
+				const d = parseDiscuss(p.text);
+				return d ? [d.cardId] : [];
+			})
+		])
+	);
 	const decisions = $derived(
 		inboxView?.available
-			? chatDecisions(inboxView.cards, inboxView.answered ?? [], inbox.pending)
+			? chatDecisions(inboxView.cards, inboxView.answered ?? [], inbox.pending, opened)
 			: []
 	);
 	const placed = $derived(placeDecisions(items, decisions));
+	// Feedback lists sent from a preview, from Wheelhouse's record of what it sent.
+	const batches = $derived(placeBatches(items, chatBatches(currentMessages()?.messages ?? [])));
 	// Only the decisions drawn hold threads, so a question is never hidden without its card.
 	const shown = $derived([...[...placed.before.values()].flat(), ...placed.end]);
 	const decisionIds = $derived(new Set(shown.map((d) => d.head.cardId)));
@@ -308,7 +330,8 @@
 		// Messages in a decision's thread are not in the conversation, and a decision card breaks a run.
 		let j = i - 1;
 		while (j >= 0 && discussed.hidden.has(items[j].id)) j--;
-		for (let k = j + 1; k <= i; k++) if (placed.before.has(k)) return false;
+		for (let k = j + 1; k <= i; k++)
+			if (placed.before.has(k) || batches.before.has(k)) return false;
 		const a = items[j];
 		const b = items[i];
 		if (!a || !b || a.kind !== b.kind || (b.kind !== 'user' && b.kind !== 'turn')) return false;
@@ -506,6 +529,12 @@
 					: null}
 				pending={threadOwner.get(d.head.cardId) === d.id ? (asking.get(d.head.cardId) ?? []) : []}
 				canAsk={!!via}
+				focus={composerBus.decision === d.head.cardId && threadOwner.get(d.head.cardId) === d.id}
+				onFocused={() => {
+					// Opened here, it keeps its card in the conversation.
+					openedDecisions.add(d.head.cardId);
+					composerBus.decision = null;
+				}}
 				onAsk={(text) => ask(d, text)}
 				onRetry={(id) => firstmateChat.retry(id, token, working && !waitingOnAnswer)}
 				onDismiss={(id) => firstmateChat.dismiss(id)}
@@ -723,6 +752,10 @@
 				{#each items as item, i (item.id)}
 					{@const grouped = groupedWithPrevious(i)}
 					{#each placed.before.get(i) ?? [] as d (d.id)}{@render decisionRow(d)}{/each}
+					{#each batches.before.get(i) ?? [] as b (b.id)}<FeedbackBatch
+							batch={b}
+							project={projectName(tasks.find((t) => t.id === b.batch.taskId)?.projectId ?? null)}
+						/>{/each}
 					{#if discussed.hidden.has(item.id)}
 						<!-- In its decision's thread. -->
 					{:else if item.kind === 'user'}
@@ -860,6 +893,10 @@
 				{/each}
 
 				{#each placed.end as d (d.id)}{@render decisionRow(d)}{/each}
+				{#each batches.end as b (b.id)}<FeedbackBatch
+						batch={b}
+						project={projectName(tasks.find((t) => t.id === b.batch.taskId)?.projectId ?? null)}
+					/>{/each}
 
 				{#each chatPending as p, pi (p.id)}
 					{@const grouped = pi > 0 || lastItem?.kind === 'user'}

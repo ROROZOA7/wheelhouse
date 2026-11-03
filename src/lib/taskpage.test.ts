@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { feedbackNote } from './preview';
-import { hasDetail, openByDefault, pickTab, previewThread, stepGist, taskTabs } from './taskpage';
-import type { BridgeMessage, PassageStep, TaskEvidence, TaskSummary } from './types';
+import { hasDetail, openByDefault, pickTab, stepGist, taskTabs } from './taskpage';
+import type { PassageStep, TaskEvidence, TaskSummary } from './types';
 
 const step = (o: Partial<PassageStep> = {}): PassageStep => ({
 	key: 'build',
@@ -123,45 +122,5 @@ describe('stages', () => {
 			pr: { url: 'https://github.com/o/r/pull/9', number: 9 } as TaskSummary['pr']
 		});
 		expect(stepGist(step({ evidence: ['pr'] }), t, ev())).toBe('Pull request #9');
-	});
-});
-
-describe('preview feedback thread', () => {
-	const msg = (o: Partial<BridgeMessage>): BridgeMessage => ({
-		requestId: 'r1',
-		text: feedbackNote('http://127.0.0.1:4399/', 'Make the header calmer'),
-		taskId: 'wh-1',
-		submittedAt: '2026-10-25T10:00:00Z',
-		delivery: 'delivered',
-		deliveryDetail: null,
-		acknowledged: null,
-		noteId: null,
-		reply: null,
-		...o
-	});
-
-	it('keeps only this task’s preview feedback, without the note’s preamble', () => {
-		const thread = previewThread(
-			[
-				msg({}),
-				msg({ requestId: 'r2', text: 'An ordinary question about wh-1' }),
-				msg({ requestId: 'r3', taskId: 'wh-2' }),
-				msg({ requestId: 'r4', acknowledged: true, reply: { body: 'On it', at: null } })
-			],
-			'wh-1'
-		);
-		expect(thread.map((c) => c.id)).toEqual(['r1', 'r4']);
-		expect(thread[0]).toMatchObject({
-			text: 'Make the header calmer',
-			status: 'Sent to Firstmate',
-			failed: false,
-			reply: null
-		});
-		expect(thread[1]).toMatchObject({ status: 'Firstmate has it', reply: 'On it' });
-	});
-
-	it('says plainly when feedback did not get through', () => {
-		const [c] = previewThread([msg({ delivery: 'failed' })], 'wh-1');
-		expect(c).toMatchObject({ status: 'Not delivered', failed: true });
 	});
 });

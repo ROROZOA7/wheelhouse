@@ -3,8 +3,8 @@
 	import { addressRewrites } from '$lib/client/addresses.svelte';
 	import { ago } from '$lib/format';
 	import { frameSandbox, type PreviewCheck } from '$lib/preview';
-	import { ExternalLink, Maximize2, MonitorOff, RotateCw } from '@lucide/svelte';
-	import PreviewFeedback from './PreviewFeedback.svelte';
+	import { pointAt, type Pointer } from '$lib/previewhelper';
+	import { ExternalLink, Maximize2, MonitorOff, MousePointerClick, RotateCw } from '@lucide/svelte';
 
 	/**
 	 * A worker's reported preview, embedded: the server checks it is on this
@@ -12,8 +12,10 @@
 	 * and says plainly when it is not. `compact` draws it on a card, scaled down
 	 * from a desktop-sized page; `fill` takes the whole height of its container
 	 * (the full-screen view); otherwise it fills the width at a usable height.
-	 * The feedback box underneath sends to the task's worker through Firstmate;
-	 * work that has landed has no worker to send it to, so it is left out.
+	 * `pointing` lays a crosshair over the page: a click names the part of the
+	 * page under it (onpoint), the element itself when the preview shares
+	 * Wheelhouse's origin, else the spot, which stays marked (`pin`) while the
+	 * captain talks about it with the preview helper.
 	 * `onfullscreen` adds a Full screen button to the toolbar. `onopen` makes a
 	 * compact preview a picture of the page (it takes no clicks or scrolling)
 	 * that opens it when clicked, and `toolbar={false}` leaves the address row
@@ -23,19 +25,42 @@
 		taskId,
 		compact = false,
 		fill = false,
-		feedback = true,
 		toolbar = true,
+		pointing = false,
+		pin = null,
+		onpoint,
 		onfullscreen,
 		onopen
 	}: {
 		taskId: string;
 		compact?: boolean;
 		fill?: boolean;
-		feedback?: boolean;
 		toolbar?: boolean;
+		/** Take the next click on the page as pointing at it (onpoint), not as a click. */
+		pointing?: boolean;
+		/** Where the captain pointed, as fractions of the frame, marked until cleared. */
+		pin?: { x: number; y: number } | null;
+		onpoint?: (p: Pointer, at: { x: number; y: number }) => void;
 		onfullscreen?: () => void;
 		onopen?: () => void;
 	} = $props();
+
+	let frame = $state<HTMLIFrameElement | null>(null);
+
+	function point(e: MouseEvent) {
+		const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const x = e.clientX - box.left;
+		const y = e.clientY - box.top;
+		let el: Element | null = null;
+		try {
+			// Only a preview on Wheelhouse's own origin can be looked inside.
+			el = frame?.contentDocument?.elementFromPoint(x, y) ?? null;
+		} catch {
+			el = null;
+		}
+		const at = { x: box.width ? x / box.width : 0, y: box.height ? y / box.height : 0 };
+		onpoint?.(pointAt(el, at, { w: Math.round(box.width), h: Math.round(box.height) }), at);
+	}
 
 	const RECHECK_MS = 15_000;
 	const DESKTOP = { w: 1280, h: 800 };
@@ -153,12 +178,33 @@
 					{/if}
 				{:else}
 					<iframe
+						bind:this={frame}
 						src={shown}
 						title="Live preview of {url}"
 						{sandbox}
 						referrerpolicy="no-referrer"
 						class="size-full border-0 bg-white"
 					></iframe>
+					{#if pointing}
+						<button
+							type="button"
+							class="absolute inset-0 cursor-crosshair bg-sea/5 ring-2 ring-sea ring-inset"
+							aria-label="Point at part of the page"
+							onclick={point}
+							data-preview-pointing
+							><span
+								class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-sea px-3.5 py-1.5 text-sm text-white shadow-lg dark:text-slate-950"
+								><MousePointerClick class="size-4" aria-hidden="true" />Click the part you mean</span
+							></button
+						>
+					{:else if pin}
+						<span
+							class="pointer-events-none absolute size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sea shadow-md ring-2 ring-sea/40"
+							style="left:{pin.x * 100}%;top:{pin.y * 100}%"
+							aria-hidden="true"
+							data-preview-pin
+						></span>
+					{/if}
 				{/if}
 			{/key}
 		{:else}
@@ -193,6 +239,4 @@
 			</div>
 		{/if}
 	</div>
-
-	{#if feedback && url}<PreviewFeedback {taskId} {url} />{/if}
 </div>

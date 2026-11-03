@@ -108,6 +108,7 @@ class Inbox {
 		return visibleCards(this.cards(seed), this.snoozed, now);
 	}
 
+	/** Questions Firstmate escalated that still wait for the captain (the badge). */
 	open(now: number): number {
 		return openCount(this.cards(), this.snoozed, now);
 	}
@@ -161,10 +162,13 @@ class Inbox {
 		choice: InboxAction,
 		note: string | null,
 		token: string,
-		picks: Picks | null = null
+		picks: Picks | null = null,
+		decided: string | null = null
 	): Promise<boolean> {
 		const withPicks =
-			choice === 'approve' && card.choices ? picksLine(card.choices, picks ?? {}) : null;
+			choice === 'approve' && card.choices && !decided
+				? picksLine(card.choices, picks ?? {})
+				: null;
 		if (withPicks && !withPicks.ok) {
 			this.complain(card.id, withPicks.error);
 			return false;
@@ -172,7 +176,7 @@ class Inbox {
 		const { [card.id]: _, ...rest } = this.errors;
 		void _;
 		this.errors = rest;
-		const line = withPicks?.ok ? withPicks.line : null;
+		const line = decided ?? (withPicks?.ok ? withPicks.line : null);
 		this.pending = {
 			...this.pending,
 			[card.id]: { choice, picks: line, note, question: card.question, posted: false }
@@ -190,7 +194,8 @@ class Inbox {
 					cardId: card.id,
 					choice,
 					note,
-					...(withPicks ? { picks: picks ?? {} } : {})
+					...(withPicks ? { picks: picks ?? {} } : {}),
+					...(decided ? { decided } : {})
 				})
 			});
 			if (!r.ok) {

@@ -1,7 +1,9 @@
 /**
- * The decision inbox: every open question in one stack, answered with one tap.
- * Shared by the server (which builds the cards, see server/inbox/cards.ts) and
- * the browser (which shows them and remembers "Ask me later" per browser).
+ * The decision inbox: every open question, those Firstmate escalated to the
+ * captain (`escalated`) apart from those it is settling itself. Shared by the
+ * server (which builds the cards, see server/inbox/cards.ts) and the browser
+ * (which shows them and remembers "Ask me later" per browser). A question is
+ * answered with the form that fits it (lib/decisionform.ts).
  *
  * An answer never bypasses Firstmate: it becomes an ordinary message through
  * `fm-inbox.sh note` whose body names the task, the decision key and the
@@ -91,6 +93,9 @@ const MEANING: Record<InboxKind, Record<InboxChoice, string>> = {
 /** Approve on a card with choices: it sends the picks. */
 const PICKS_LABEL = 'Send picks';
 const PICKS_MEANING = 'Go ahead with the picks below.';
+/** An answer decided in the chat from a form Firstmate wrote there: it names the words decided. */
+export const DECIDED_LABEL = 'Decided';
+const DECIDED_MEANING = 'The captain decided in the chat, from the options you gave there.';
 
 export function optionsFor(kind: InboxKind, picks = false): InboxOption[] {
 	return CHOICES.map((choice) =>
@@ -340,14 +345,19 @@ export function answerText(
 	card: InboxCard,
 	choice: InboxChoice,
 	note: string | null,
-	picks: string | null = null
+	picks: string | null = null,
+	decided: string | null = null
 ): string {
 	const option = card.options.find((o) => o.choice === choice)!;
 	const lines = heading(card, 'answer');
 	if (card.kind === 'merge' && card.evidence.pr)
 		lines.push(`Pull request: ${card.evidence.pr.url}`);
-	lines.push(`Answer: ${option.label} - ${option.meaning}`);
-	if (picks) lines.push(`Picks: ${picks}`);
+	if (decided) {
+		lines.push(`Answer: ${DECIDED_LABEL} - ${DECIDED_MEANING}`, `Picks: ${oneLine(decided, 300)}`);
+	} else {
+		lines.push(`Answer: ${option.label} - ${option.meaning}`);
+		if (picks) lines.push(`Picks: ${picks}`);
+	}
 	return withNote(lines, note);
 }
 
@@ -388,7 +398,7 @@ const oneLine = (s: string, max: number) => {
 export const questionLine = (question: string) => oneLine(question, 300);
 
 const labelChoice = (label: string): InboxChoice | undefined =>
-	label === PICKS_LABEL
+	label === PICKS_LABEL || label === DECIDED_LABEL
 		? 'approve'
 		: CHOICES.find(
 				(c) => LABEL[c] === label || Object.values(KIND_LABEL).some((l) => l?.[c] === label)
@@ -459,9 +469,18 @@ export function visibleCards(
 /** No answer has reached Firstmate yet: none sent, or the latest was not delivered. */
 export const awaitsAnswer = (c: InboxCard) => !c.sent || c.sent.delivery === 'failed';
 
-/** Cards still waiting for an answer (the badge count). */
+/**
+ * Firstmate escalated it to the captain: work it holds for the captain's call,
+ * a green pull request waiting for the word to merge, or a preview waiting
+ * for sign-off. Every other open question (a worker's decision, a blocker, the
+ * review's questions) is Firstmate's to settle under its own rules: it shows
+ * under Handled by Firstmate, where the captain can still take it over.
+ */
+export const escalated = (c: Pick<InboxCard, 'owner'>) => c.owner === 'captain';
+
+/** Cards still waiting for the captain's answer (the badge count): only what Firstmate escalated. */
 export const openCount = (cards: InboxCard[], snoozed: Snoozed, now: number) =>
-	visibleCards(cards, snoozed, now).shown.length;
+	visibleCards(cards.filter(escalated), snoozed, now).shown.length;
 
 /** The card of the work Firstmate holds for the captain's call on a task (server/inbox/cards.ts). */
 export const holdCardId = (taskId: string) => `${taskId}:captain-hold`;
@@ -469,10 +488,11 @@ export const holdCardId = (taskId: string) => `${taskId}:captain-hold`;
 /** The Decisions page, opened on one card. */
 export const cardHref = (cardId: string) => `/inbox#card-${encodeURIComponent(cardId)}`;
 
-/** The keyboard: j/k move, a/f/s answer, l asks later, c closes, Enter opens the evidence. */
+/** The keyboard: j/k move, a agrees, Enter opens it in the chat, e shows the evidence, l asks later, c closes. */
 export type InboxKey =
 	| { do: 'move'; by: 1 | -1 }
-	| { do: 'answer'; choice: InboxChoice }
+	| { do: 'agree' }
+	| { do: 'chat' }
 	| { do: 'later' }
 	| { do: 'close' }
 	| { do: 'evidence' };
@@ -486,17 +506,15 @@ export function keyAction(key: string): InboxKey | null {
 		case 'ArrowUp':
 			return { do: 'move', by: -1 };
 		case 'a':
-			return { do: 'answer', choice: 'approve' };
-		case 'f':
-			return { do: 'answer', choice: 'fix' };
-		case 's':
-			return { do: 'answer', choice: 'skip' };
+			return { do: 'agree' };
+		case 'Enter':
+			return { do: 'chat' };
+		case 'e':
+			return { do: 'evidence' };
 		case 'l':
 			return { do: 'later' };
 		case 'c':
 			return { do: 'close' };
-		case 'Enter':
-			return { do: 'evidence' };
 		default:
 			return null;
 	}
