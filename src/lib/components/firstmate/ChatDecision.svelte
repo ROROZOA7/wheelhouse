@@ -15,7 +15,13 @@
 		X
 	} from '@lucide/svelte';
 	import type { ChatDecision } from '$lib/chat/decisions';
-	import { canDiscuss, refinedForm, type Thread } from '$lib/chat/discuss';
+	import {
+		byQuestion,
+		canDiscuss,
+		refinedForm,
+		type Thread,
+		type ThreadMsg
+	} from '$lib/chat/discuss';
 	import { markdown } from '$lib/chat/markdown';
 	import { pendingLabel, type Pending } from '$lib/chat/outbox';
 	import { inbox } from '$lib/client/inbox.svelte';
@@ -104,6 +110,8 @@
 	);
 	// Firstmate's latest form in the discussion of this question replaces the one read from it.
 	const refined = $derived(refinedForm(thread, head.question));
+	// A card id asked again with a new question: the talk about earlier ones folds away above it.
+	const parts = $derived(byQuestion(thread, head.question));
 	const form = $derived(refined?.form ?? (card ? cardForm(card) : null));
 	// A new form starts over; the same form redrawn (a fresh inbox read) keeps the captain's picks.
 	const formKey = $derived(refined?.id ?? `card:${card?.question ?? ''}`);
@@ -167,6 +175,33 @@
 		if (onAsk(t)) draft = '';
 	}
 </script>
+
+{#snippet message(m: ThreadMsg, current: boolean)}
+	<li class="flex gap-2.5">
+		{#if m.who === 'firstmate'}<Avatar class="mt-0.5 size-5" />{:else}<span
+				class="captain-avatar mt-0.5 !size-5 !text-[0.7rem]">C</span
+			>{/if}
+		<div class="min-w-0 flex-1">
+			<p class="text-xs text-muted-foreground">
+				<span class="font-medium text-foreground"
+					>{m.who === 'firstmate' ? 'Firstmate' : 'You'}</span
+				>{#if m.at}
+					· {time(m.at)}{/if}
+			</p>
+			{#if m.who === 'firstmate'}
+				<div class="chat-md mt-0.5 text-sm">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
+					{@html markdown(withoutForm(m.text), { docLinks: true })}
+				</div>
+				{#if current && formIn(m.text)}<p class="mt-0.5 text-xs text-muted-foreground">
+						Firstmate updated the options above.
+					</p>{/if}
+			{:else}
+				<p class="mt-0.5 text-sm leading-relaxed whitespace-pre-line">{m.text}</p>
+			{/if}
+		</div>
+	</li>
+{/snippet}
 
 {#snippet discuss()}
 	<button
@@ -353,32 +388,20 @@
 		>
 			{#if thread?.messages.length || pending.length}
 				<ul class="flex flex-col gap-3 pb-1">
-					{#each thread?.messages ?? [] as m (m.id)}
-						<li class="flex gap-2.5">
-							{#if m.who === 'firstmate'}<Avatar class="mt-0.5 size-5" />{:else}<span
-									class="captain-avatar mt-0.5 !size-5 !text-[0.7rem]">C</span
-								>{/if}
-							<div class="min-w-0 flex-1">
-								<p class="text-xs text-muted-foreground">
-									<span class="font-medium text-foreground"
-										>{m.who === 'firstmate' ? 'Firstmate' : 'You'}</span
-									>{#if m.at}
-										· {time(m.at)}{/if}
-								</p>
-								{#if m.who === 'firstmate'}
-									<div class="chat-md mt-0.5 text-sm">
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
-										{@html markdown(withoutForm(m.text), { docLinks: true })}
-									</div>
-									{#if formIn(m.text)}<p class="mt-0.5 text-xs text-muted-foreground">
-											Firstmate updated the options above.
-										</p>{/if}
-								{:else}
-									<p class="mt-0.5 text-sm leading-relaxed whitespace-pre-line">{m.text}</p>
-								{/if}
-							</div>
+					{#each parts.earlier as e, i (i)}
+						<li>
+							<details data-earlier>
+								<summary
+									class="cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+									>Earlier question: “{e.question}”</summary
+								>
+								<ul class="mt-2 flex flex-col gap-3 border-b border-hair/70 pb-3">
+									{#each e.messages as m (m.id)}{@render message(m, false)}{/each}
+								</ul>
+							</details>
 						</li>
 					{/each}
+					{#each parts.current as m (m.id)}{@render message(m, true)}{/each}
 					{#each pending as p (p.pending.id)}
 						<li class="flex gap-2.5" data-pending={p.pending.state}>
 							<span class="captain-avatar mt-0.5 !size-5 !text-[0.7rem]">C</span>

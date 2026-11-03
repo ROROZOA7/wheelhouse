@@ -344,6 +344,57 @@ describe('decisions in the chat', () => {
 		});
 	});
 
+	it('folds the talk about an earlier question asked under the same card id', () => {
+		const reply = [
+			'Two ways to go:',
+			'',
+			'```decision-form',
+			'Which layout should ship?',
+			'- Three tiers (recommended)',
+			'- Two tiers',
+			'```'
+		].join('\n');
+		const asked = { ...PRICING, question: 'Keep the annual discount at 20%?', askedAt: at('30') };
+		state.page.data = { inbox: view([asked]), sessionToken: 't' };
+		start([
+			...BASE.slice(0, 3),
+			captain('u3', '16', ASK),
+			firstmate('a3', '17', reply),
+			done('d3', '17'),
+			captain(
+				'u4',
+				'31',
+				discussText(
+					{ taskId: 'lumen-pricing', key: 'layout', question: asked.question },
+					'Why 20%?'
+				)
+			),
+			firstmate('a4', '32', 'It matches what the old page offered.'),
+			done('d4', '32'),
+			...BASE.slice(3)
+		]);
+		const card = decision('lumen-pricing:layout');
+		const thread = card.querySelector('[data-discussion]')!;
+		const earlier = thread.querySelector<HTMLDetailsElement>('details[data-earlier]')!;
+		expect(earlier.open).toBe(false);
+		expect(earlier.querySelector('summary')!.textContent).toBe(
+			`Earlier question: “${PRICING.question}”`
+		);
+		expect(earlier.textContent).toContain('What’s the risk?');
+		expect(earlier.textContent).toContain('Two ways to go:');
+		// The old form neither answers the new question nor claims to have changed its options.
+		expect(thread.textContent).not.toContain('Firstmate updated the options above.');
+		expect(card.querySelector('[data-refined]')).toBeNull();
+		// The talk about the current question stays outside the fold.
+		const current = [...thread.querySelectorAll('li')].filter(
+			(li) => !li.closest('details') && !li.querySelector('details')
+		);
+		expect(current.map((li) => li.textContent)).toEqual([
+			expect.stringContaining('Why 20%?'),
+			expect.stringContaining('It matches what the old page offered.')
+		]);
+	});
+
 	it('leaves out a question Firstmate is settling until it is opened from the Decisions page', async () => {
 		const review: InboxCard = {
 			...PRICING,

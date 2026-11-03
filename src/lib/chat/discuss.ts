@@ -97,6 +97,30 @@ export function refinedForm(
 }
 
 /**
+ * A thread split by the question its messages were about: those about
+ * `question` (the card's current one), and before them, for each earlier
+ * question asked under the same card id, its messages in order.
+ */
+export function byQuestion(
+	thread: Thread | null,
+	question: string
+): { earlier: { question: string; messages: ThreadMsg[] }[]; current: ThreadMsg[] } {
+	const quoted = snippetOf(question);
+	const earlier: { question: string; messages: ThreadMsg[] }[] = [];
+	const current: ThreadMsg[] = [];
+	for (const m of thread?.messages ?? []) {
+		if (m.question === quoted) {
+			current.push(m);
+			continue;
+		}
+		const last = earlier.at(-1);
+		if (last?.question === m.question) last.messages.push(m);
+		else earlier.push({ question: m.question, messages: [m] });
+	}
+	return { earlier, current };
+}
+
+/**
  * The threads of the decisions the chat shows (`cards`, by card id): each
  * captain message about one of them, with the reply Firstmate started right
  * after it, and the ids of those items, which the conversation leaves out. A
