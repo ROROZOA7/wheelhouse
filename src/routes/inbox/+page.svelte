@@ -67,6 +67,7 @@
 	/** The card to move on to once this one leaves the stack: the next, else the one before. */
 	function after(from: InboxCard): InboxCard | null {
 		const i = cards.findIndex((c) => c.id === from.id);
+		if (i < 0) return null;
 		return cards[i + 1] ?? cards[i - 1] ?? null;
 	}
 

@@ -15,19 +15,13 @@
 		X
 	} from '@lucide/svelte';
 	import type { ChatDecision } from '$lib/chat/decisions';
-	import { canDiscuss, type Thread } from '$lib/chat/discuss';
+	import { canDiscuss, refinedForm, type Thread } from '$lib/chat/discuss';
 	import { markdown } from '$lib/chat/markdown';
 	import { pendingLabel, type Pending } from '$lib/chat/outbox';
 	import { inbox } from '$lib/client/inbox.svelte';
 	import { pullRequests } from '$lib/client/pullrequests';
 	import { answerWith } from '$lib/client/agree';
-	import {
-		cardForm,
-		decidedLabel,
-		formIn,
-		withoutForm,
-		type DecisionForm as Form
-	} from '$lib/decisionform';
+	import { cardForm, decidedLabel, formIn, withoutForm } from '$lib/decisionform';
 	import { choiceLabel, closable, escalated, type InboxKind, type InboxView } from '$lib/inbox';
 	import { ago } from '$lib/format';
 	import LinkedText from '$lib/components/wh/LinkedText.svelte';
@@ -108,15 +102,8 @@
 	const canAnswer = $derived(
 		inbox.view(page.data.inbox as InboxView | undefined)?.canAnswer ?? false
 	);
-	// Firstmate's latest form in the discussion replaces the one read from the question.
-	const refined = $derived.by((): { id: string; form: Form } | null => {
-		const msgs = thread?.messages ?? [];
-		for (let i = msgs.length - 1; i >= 0; i--) {
-			const f = msgs[i].who === 'firstmate' ? formIn(msgs[i].text) : null;
-			if (f) return { id: msgs[i].id, form: f };
-		}
-		return null;
-	});
+	// Firstmate's latest form in the discussion of this question replaces the one read from it.
+	const refined = $derived(refinedForm(thread, head.question));
 	const form = $derived(refined?.form ?? (card ? cardForm(card) : null));
 	// A new form starts over; the same form redrawn (a fresh inbox read) keeps the captain's picks.
 	const formKey = $derived(refined?.id ?? `card:${card?.question ?? ''}`);

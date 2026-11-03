@@ -18,6 +18,7 @@
  * the turn Firstmate answers it with, in the thread under the decision's card
  * instead of in the conversation. Pure, so it is unit-tested.
  */
+import { formIn, type DecisionForm } from '../decisionform';
 import type { Item } from './fold';
 import type { Pending } from './outbox';
 import { snippetOf } from './reply';
@@ -36,6 +37,8 @@ export interface ThreadMsg {
 	/** The captain's words without the quote, or Firstmate's reply as Markdown. */
 	text: string;
 	at: string | null;
+	/** The question quoted in the discussion message it is, or answers. */
+	question: string;
 }
 
 /** A decision's thread: its messages, and whether Firstmate is still answering. */
@@ -66,10 +69,31 @@ export function discussText(ref: DiscussRef, body: string): string {
 }
 
 /** A sent message back as the decision it is about and the captain's words; null when it is not one. */
-export function parseDiscuss(text: string): { cardId: string; body: string } | null {
+export function parseDiscuss(
+	text: string
+): { cardId: string; question: string; body: string } | null {
 	const m = text.replace(/\r\n?/g, '\n').match(QUOTED);
 	if (!m || !m[4].trim()) return null;
-	return { cardId: cardIdOf({ taskId: m[1], key: m[2] }), body: m[4].trim() };
+	return { cardId: cardIdOf({ taskId: m[1], key: m[2] }), question: m[3], body: m[4].trim() };
+}
+
+/**
+ * Firstmate's latest form in a thread, from its replies about `question`
+ * only: a card id comes back for a new question, and a form for an earlier
+ * one must not answer it.
+ */
+export function refinedForm(
+	thread: Thread | null,
+	question: string
+): { id: string; form: DecisionForm } | null {
+	const quoted = snippetOf(question);
+	const msgs = thread?.messages ?? [];
+	for (let i = msgs.length - 1; i >= 0; i--) {
+		const m = msgs[i];
+		const f = m.who === 'firstmate' && m.question === quoted ? formIn(m.text) : null;
+		if (f) return { id: m.id, form: f };
+	}
+	return null;
 }
 
 /**
@@ -92,7 +116,13 @@ export function threads(
 		if (!d || !cards.has(d.cardId)) continue;
 		const thread = byCard.get(d.cardId) ?? { messages: [], answering: false };
 		byCard.set(d.cardId, thread);
-		thread.messages.push({ id: it.id, who: 'captain', text: d.body, at: it.at });
+		thread.messages.push({
+			id: it.id,
+			who: 'captain',
+			text: d.body,
+			at: it.at,
+			question: d.question
+		});
 		thread.answering = false;
 		hidden.add(it.id);
 		const next = items[i + 1];
@@ -101,7 +131,13 @@ export function threads(
 		hidden.add(next.id);
 		for (const p of next.parts) {
 			if (p.kind === 'text')
-				thread.messages.push({ id: p.id, who: 'firstmate', text: p.text, at: next.at });
+				thread.messages.push({
+					id: p.id,
+					who: 'firstmate',
+					text: p.text,
+					at: next.at,
+					question: d.question
+				});
 		}
 		thread.answering = !next.done && !next.interrupted;
 		i++;

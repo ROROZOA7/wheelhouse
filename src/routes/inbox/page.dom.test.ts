@@ -157,4 +157,37 @@ describe('the Decisions page', () => {
 		expect(handled.textContent).toContain('Expired links: a friendly page or an error?');
 		expect(handled.textContent).toContain('Firstmate: Keep as is');
 	});
+
+	it('stays put when the captain agrees with a question Firstmate is settling', async () => {
+		// The link opens it under Handled by Firstmate; Needs you still has another question.
+		const settling: InboxCard = {
+			...hold,
+			owner: 'firstmate',
+			recommendation: { choice: 'approve', text: 'Flag it first.' }
+		};
+		const both = { ...view, cards: [first, settling] };
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify(both)))
+		);
+		const scrolled: string[] = [];
+		Element.prototype.scrollIntoView = function (this: Element) {
+			scrolled.push(this.id);
+		};
+		app = mount(Page, {
+			target: document.body,
+			props: { data: { inbox: both, sessionToken: 'tok', handled: none } } as never
+		});
+		flushSync();
+		await tick();
+		flushSync();
+		const handled = document.querySelector<HTMLElement>('[data-handled]')!;
+		const agree = handled.querySelector<HTMLButtonElement>('[data-agree]')!;
+		expect(agree).not.toBeNull();
+		scrolled.length = 0;
+		agree.click();
+		flushSync();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(scrolled).not.toContain('card-search:captain-hold');
+	});
 });
