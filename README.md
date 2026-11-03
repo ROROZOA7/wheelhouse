@@ -41,7 +41,7 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
   ![The Firstmate chat: a reply that a pull request is ready, with its live preview as a card underneath, showing the app and links to the pull request and a full-size view](docs/screenshots/chat-preview.png)
 
-  ![Decisions in the Firstmate chat: a review question and a choice between two designs, each a card with Approve, Fix, Skip and Discuss](docs/screenshots/chat-decision.png)
+  ![A decision in the Firstmate chat: Firstmate's message, then the card asking which onboarding design should ship, with a written answer, a note and Discuss to talk it through](docs/screenshots/chat-decision.png)
 
 - 🗺️ **Harbour.** Every project at a glance: what needs you, what is moving and what landed. Open one for its work, each task with a live console.
 
@@ -59,9 +59,9 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
 - 📱 **From your phone.** Message Firstmate from Discord; its answers, alerts and decisions come back with buttons.
 
-- ✅ **Decisions.** Every open question in one stack, answered in one tap.
+- ✅ **Decisions.** Only what Firstmate escalated to you, with its recommendation; what it settled itself waits, folded, under Handled by Firstmate.
 
-  ![Decisions: every open question as a card, with Approve, Fix, Skip and Ask me later, and keyboard shortcuts](docs/screenshots/inbox.png)
+  ![Decisions: Needs you, with a held question and Chat about this, and Handled by Firstmate opened to the questions Firstmate is settling itself](docs/screenshots/inbox.png)
 
 - 🧭 **Task pages.** Every check, file, PR and log for a task in one place.
 
@@ -77,7 +77,7 @@ Running Wheelhouse from a clone instead (see [Developing Wheelhouse](docs/develo
 
 - 🖥️ **Live preview.** Click around the real app and send feedback to the worker.
 
-  ![A live preview of the app under review, with feedback sent to the worker and Firstmate's reply beside it](docs/screenshots/preview.png)
+  ![A live preview full screen, with the preview helper beside it: the captain points at the expiry menu, the helper answers and suggests a line, and the feedback list waits to be sent to Firstmate](docs/screenshots/preview.png)
 
 - 🤝 **Decided for you.** Every call Firstmate made on your behalf, with its reason.
 
@@ -119,7 +119,8 @@ Node.js 22 or newer, a Firstmate home, and `tmux` and Claude Code on your `PATH`
 
 ### How the agents run
 
-- **Decisions** answers go to Firstmate as messages; an answered card leaves at once, from the Decisions page, On deck and the task page, which all show the same decision box. When a question's text lists options (A/B/C, or numbered calls), the card shows them as choices with the recommended one picked, and **Send picks** sends your picks. Keys: `j`/`k` move, `a`/`f`/`s` answer (`a` sends the picks), `l` ask later, `c` close, Enter for evidence.
+- **Decisions** shows only what Firstmate escalated to you, with its recommendation; everything it settled itself is folded under **Handled by Firstmate**, where you can take any of it over. **Chat about this** opens a question in the Firstmate chat with the form that fits it (one-tap answers, options to pick, or a written answer), which Firstmate can change as you talk it through; **Agree** sends its recommendation in one tap. Answers go to Firstmate as messages, and an answered card leaves at once. Keys: `j`/`k` move, `a` agree, `Enter` chat, `e` evidence, `l` later, `c` close.
+- **Preview feedback** is talked through first: on a task's Live preview, a helper that sees only that preview (its page, screenshots, instructions and history) answers, asks and builds a feedback list you edit; **Send to Firstmate** sends the list as one message for the same task, and it shows in the chat.
 - **Passage** checks that run a command stay off until you allow exactly those commands.
 - **Improvements** needs improve's Wheelhouse plugin: `wheelhouse plugin install chrisjowen/improve`.
 - **Secrets** reach the crew by name with `wh-vault`, installed alongside `wheelhouse`: values stay in the macOS login Keychain, and `wh-vault run -- <command>` gives one command its project's granted secrets. The **Vault** page shows names, grants and use, never a value, and is where you add secrets and choose which projects may use each. Grants limit accidents and prompt injection, not a worker set on getting a secret.

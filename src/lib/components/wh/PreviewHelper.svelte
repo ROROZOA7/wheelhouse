@@ -77,9 +77,6 @@
 		await previewHelpers.send({ id: task.id, title: task.shortTitle }, url, token);
 		sending = false;
 	}
-
-	const HELLO =
-		'I can see this preview, its screenshots, the task’s instructions and what the worker has done so far. Point at anything, or just say what you think; I will turn it into a list for the worker. **Nothing goes to Firstmate until you send it.**';
 </script>
 
 <section
@@ -103,10 +100,12 @@
 					class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-brass bg-card text-sea"
 					aria-hidden="true"><MonitorPlay class="size-3.5" /></span
 				>
-				<div class="chat-md min-w-0 flex-1 text-sm">
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
-					{@html markdown(HELLO)}
-				</div>
+				<!-- Plain markup, not Markdown: this part is drawn on the server too. -->
+				<p class="min-w-0 flex-1 text-sm leading-relaxed">
+					I can see this preview, its screenshots, the task’s instructions and what the worker has
+					done so far. Point at anything, or just say what you think; I will turn it into a list for
+					the worker. <strong>Nothing goes to Firstmate until you send it.</strong>
+				</p>
 			</li>
 			{#each c.said as m (m.id)}
 				{#if m.who === 'captain'}

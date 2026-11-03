@@ -1003,7 +1003,8 @@
 			<h2 id="live-preview" class="sr-only">Live preview</h2>
 			{#if active === 'preview' && !full}
 				{@const talk = task.status !== 'landed'}
-				<div class="grid gap-4 {talk ? 'xl:grid-cols-[minmax(0,1fr)_24rem]' : ''}">
+				<!-- Side by side on a wide screen; below it, under the page (Full screen puts them side by side). -->
+				<div class="grid gap-4 {talk ? '2xl:grid-cols-[minmax(0,1fr)_24rem]' : ''}">
 					<LivePreview
 						taskId={task.id}
 						pointing={talk && pointing}
@@ -1015,7 +1016,7 @@
 						onfullscreen={() => show('preview', true)}
 					/>
 					{#if talk}
-						<div class="flex h-[70vh] min-h-80 flex-col xl:mt-[1.875rem]">
+						<div class="flex h-[34rem] flex-col 2xl:mt-[1.875rem] 2xl:h-[70vh] 2xl:min-h-80">
 							<PreviewHelper {task} url={task.preview.url} bind:pointing bind:attached={pointed} />
 						</div>
 					{/if}

@@ -139,7 +139,13 @@
 		if (!focus) return;
 		opened = true;
 		void tick().then(() => {
-			root?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			// Only the conversation scrolls: scrollIntoView would move the fixed page around it too.
+			const list = root?.closest<HTMLElement>('.overflow-y-auto');
+			if (root && list) {
+				const top = root.getBoundingClientRect().top - list.getBoundingClientRect().top;
+				// At once: a smooth scroll loses to the chat following its latest message meanwhile.
+				list.scrollTo({ top: list.scrollTop + top - 24 });
+			}
 			input?.focus({ preventScroll: true });
 			onFocused?.();
 		});

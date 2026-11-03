@@ -238,8 +238,17 @@ const NOUN: Record<string, string> = {
  * can look inside the page (a preview on its own origin), named the way the
  * captain would say it, else the spot, by where it is in the frame.
  */
+/** The parts of a DOM element pointAt reads (structural, so the server's build needs no DOM types). */
+interface PointedElement {
+	tagName: string;
+	textContent: string | null;
+	value?: string;
+	closest(selector: string): PointedElement | null;
+	getAttribute(name: string): string | null;
+}
+
 export function pointAt(
-	el: Element | null,
+	el: PointedElement | null,
 	at: { x: number; y: number },
 	frame: { w: number; h: number }
 ): Pointer {
@@ -253,7 +262,7 @@ export function pointAt(
 			near.getAttribute('role') === 'button' ? 'button' : (NOUN[tag] ?? 'part of the page');
 		const words = cut(
 			tidy(
-				(near as HTMLInputElement).value ||
+				near.value ||
 					near.getAttribute('aria-label') ||
 					near.getAttribute('alt') ||
 					near.textContent ||

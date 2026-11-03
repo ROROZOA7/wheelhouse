@@ -12,7 +12,8 @@
  *   keep the calls as they are (`picks`);
  * - otherwise two plain answers that fit the kind of question (Merge / Not yet
  *   on a merge call, Go ahead / Not like this on work held for the captain),
- *   each one tap; a review question keeps its three calls as a choice.
+ *   each one tap; a review question keeps its three calls as a choice; and a
+ *   held question that asks which, what or how is answered in words.
  *
  * When the captain talks a decision through, Firstmate can replace the form by
  * ending a reply with a `decision-form` block (the discussion message tells it
@@ -104,9 +105,17 @@ const PLAIN: Record<InboxKind, { label: string; choice: InboxChoice }[]> = {
 	]
 };
 
+/** A question that asks for something other than yes or no ("Which should ship?"), by its last question. */
+const OPEN_QUESTION = /^(?:which|what|how|where|who|when|why)\b/i;
+function asksOpen(question: string | undefined): boolean {
+	const asked = (question ?? '').match(/[^.?!]*\?/g);
+	const last = asked?.[asked.length - 1]?.trim();
+	return !!last && OPEN_QUESTION.test(last);
+}
+
 /** The form a card is answered with, from what Firstmate recorded about it. */
 export function cardForm(
-	card: Pick<InboxCard, 'kind' | 'choices' | 'recommendation'>
+	card: Pick<InboxCard, 'kind' | 'choices' | 'recommendation'> & { question?: string }
 ): DecisionForm {
 	const c = card.choices;
 	if (c) {
@@ -126,6 +135,10 @@ export function cardForm(
 			};
 		}
 		return { kind: 'picks', prompt: null, choices: c, from: 'card' };
+	}
+	// "Which should ship?" is not answered with Go ahead: without named options it is written.
+	if ((card.kind === 'hold' || card.kind === 'decision') && asksOpen(card.question)) {
+		return { kind: 'text', prompt: null, from: 'card' };
 	}
 	const rec = card.recommendation?.choice ?? (card.kind === 'merge' ? 'approve' : null);
 	const plain = PLAIN[card.kind];

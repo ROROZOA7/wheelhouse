@@ -384,6 +384,48 @@ describe('decisions in the chat', () => {
 	});
 });
 
+describe('preview feedback in the chat', () => {
+	it('shows a list sent from a preview as the captain’s card to Firstmate, where it was sent', async () => {
+		const { live } = await import('$lib/client/live.svelte');
+		const { batchText } = await import('$lib/previewhelper');
+		live.messages = {
+			schema: 'wheelhouse-messages.v1',
+			available: true,
+			reason: null,
+			receiptsAt: null,
+			receiptsError: null,
+			messages: [
+				{
+					requestId: 'wh-batch',
+					text: batchText({ id: 'lumen-share', title: 'Share links' }, 'http://127.0.0.1:5240/', [
+						{ text: 'Make links last 30 days' }
+					]),
+					taskId: 'lumen-share',
+					submittedAt: at('10'),
+					delivery: 'delivered',
+					deliveryDetail: null,
+					acknowledged: true,
+					noteId: 'n1',
+					reply: { body: 'Passed to the worker.', at: at('11') }
+				}
+			]
+		} as never;
+		state.page.data = { inbox: view([]), sessionToken: 't' };
+		start(BASE);
+		const card = document.querySelector<HTMLElement>('[data-feedback-batch]')!;
+		expect(card.textContent).toContain('To Firstmate · preview feedback');
+		expect(card.textContent).toContain('Make links last 30 days');
+		expect(card.textContent).toContain('Firstmate has it and passes it to the same task');
+		expect(card.textContent).toContain('Passed to the worker.');
+		// Between the morning messages and the later ones, at the time it was sent.
+		const order = [
+			...document.querySelectorAll<HTMLElement>('[data-bubble], [data-feedback-batch]')
+		].map((el) => (el.dataset.feedbackBatch !== undefined ? 'batch' : el.textContent?.trim()));
+		expect(order).toEqual(['Morning.', 'Morning, Captain.', 'batch', 'Thanks.', 'Understood.']);
+		live.messages = null;
+	});
+});
+
 describe('live previews in the chat', () => {
 	it('shows a task’s preview under the reply about it, with its pull request', () => {
 		const task = taskSummary('lumen-share-links', 'needs-review', {

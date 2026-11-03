@@ -46,6 +46,16 @@ describe('cardForm', () => {
 		expect(recommendedOption(review)?.answer.choice).toBe('skip');
 	});
 
+	it('asks for a written answer when a held question asks which, not yes or no', () => {
+		const f = cardForm({
+			...base,
+			question: 'Both designs are ready: a tour or a welcome page. Which should ship?'
+		});
+		expect(f).toEqual({ kind: 'text', prompt: null, from: 'card' });
+		expect(cardForm({ ...base, question: 'Ship it behind a flag?' }).kind).toBe('buttons');
+		expect(cardForm({ ...base, kind: 'merge', question: 'Which? Merge it?' }).kind).toBe('buttons');
+	});
+
 	const one: InboxChoices = {
 		intro: 'Which search?',
 		after: null,

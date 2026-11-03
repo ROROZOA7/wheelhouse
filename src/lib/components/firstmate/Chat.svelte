@@ -283,6 +283,8 @@
 
 	let scroller: HTMLDivElement | undefined = $state();
 	let atBottom = $state(true);
+	// A decision brought into view (Chat about this) holds the place until the captain scrolls back down.
+	let holding = false;
 	const nearBottom = () =>
 		!scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
 
@@ -298,7 +300,7 @@
 		void attachments.drafts.length;
 		void placed.end.length;
 		void discussed.hidden.size;
-		stick = nearBottom();
+		stick = nearBottom() && !holding;
 	});
 	$effect(() => {
 		void items;
@@ -318,7 +320,7 @@
 		const el = scroller;
 		if (!thread || !el) return;
 		const watch = new ResizeObserver(() => {
-			if (atBottom) el.scrollTo({ top: el.scrollHeight });
+			if (atBottom && !holding) el.scrollTo({ top: el.scrollHeight });
 		});
 		watch.observe(thread);
 		return () => watch.disconnect();
@@ -534,6 +536,7 @@
 					// Opened here, it keeps its card in the conversation.
 					openedDecisions.add(d.head.cardId);
 					composerBus.decision = null;
+					holding = true;
 				}}
 				onAsk={(text) => ask(d, text)}
 				onRetry={(id) => firstmateChat.retry(id, token, working && !waitingOnAnswer)}
@@ -706,7 +709,10 @@
 	<div class="relative min-h-0 flex-1">
 		<div
 			bind:this={scroller}
-			onscroll={() => (atBottom = nearBottom())}
+			onscroll={() => {
+				atBottom = nearBottom();
+				if (atBottom) holding = false;
+			}}
 			class="no-scrollbar h-full overflow-y-auto"
 		>
 			<div bind:this={thread} class="flex flex-col gap-6 px-4 pt-8 pb-10 sm:px-6 lg:px-10">
