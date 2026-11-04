@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { PreviewProber } from './preview';
+import { CLOSED, PreviewProber, STOPPED } from './preview';
 
 let server: Server;
 let base = '';
@@ -48,17 +48,46 @@ describe('PreviewProber', () => {
 		expect(r.reason).toMatch(/frame-ancestors/);
 	});
 
-	it('says plainly when nothing answers', async () => {
+	it('says plainly when nothing answers: stopped, or closed once the work has landed', async () => {
 		const closed = createServer();
 		await new Promise<void>((r) => closed.listen(0, '127.0.0.1', r));
 		const port = (closed.address() as AddressInfo).port;
 		await new Promise<void>((r) => closed.close(() => r()));
-		const r = await new PreviewProber().check(
-			{ url: `http://127.0.0.1:${port}/`, reportedAt: at },
+		const preview = { url: `http://127.0.0.1:${port}/`, reportedAt: at };
+		const r = await new PreviewProber().check(preview, page);
+		expect(r).toMatchObject({ state: 'down', reason: STOPPED });
+		expect(r.reason).not.toMatch(/127\.0\.0\.1|port|http/i);
+		expect((await new PreviewProber().check(preview, page, { landed: true })).reason).toBe(CLOSED);
+	});
+
+	it('counts a preview that does not answer in time as stopped', async () => {
+		const f = vi.fn(
+			(_url: string, init: RequestInit) =>
+				new Promise<Response>((_res, rej) =>
+					init.signal!.addEventListener('abort', () => rej(init.signal!.reason))
+				)
+		);
+		const r = await new PreviewProber({ fetch: f as unknown as typeof fetch, timeoutMs: 20 }).check(
+			{ url: 'http://127.0.0.1:9/', reportedAt: at },
 			page
 		);
 		expect(r.state).toBe('down');
-		expect(r.reason).toMatch(/Preview not running/);
+	});
+
+	it('does not follow a redirect, even to another machine', async () => {
+		const f = vi.fn(
+			async () => new Response(null, { status: 302, headers: { location: 'http://example.com/' } })
+		);
+		const r = await new PreviewProber({ fetch: f as unknown as typeof fetch }).check(
+			{ url: 'http://127.0.0.1:9/', reportedAt: at },
+			page
+		);
+		expect(f).toHaveBeenCalledTimes(1);
+		expect(f.mock.calls[0]).toEqual([
+			'http://127.0.0.1:9/',
+			expect.objectContaining({ redirect: 'manual' })
+		]);
+		expect(r.state).toBe('live');
 	});
 
 	it('never fetches a preview that is not on this machine', async () => {

@@ -12,7 +12,8 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ params, request }) => {
 	const task = (await currentFleet()).tasks.find((t) => t.id === params.id);
 	if (!task) return json({ message: 'No such task.' }, { status: 404, headers: NO_STORE });
-	return json(await previewProber().check(task.preview, servedOrigin(request)), {
-		headers: NO_STORE
+	const check = await previewProber().check(task.preview, servedOrigin(request), {
+		landed: task.status === 'landed'
 	});
+	return json(check, { headers: NO_STORE });
 };

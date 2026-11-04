@@ -4,6 +4,7 @@ import type { PreviewCheck } from '$lib/preview';
 
 vi.mock('$app/state', () => ({ page: { data: {} } }));
 const { addressRewrites } = await import('$lib/client/addresses.svelte');
+const { previewChecks } = await import('$lib/client/previewchecks.svelte');
 const { default: LivePreview } = await import('./LivePreview.svelte');
 
 /** A task's live preview, from a page served at localhost:4310, with and without an address rewrite. */
@@ -16,20 +17,29 @@ const CHECK: PreviewCheck = {
 	checkedAt: '2026-10-31T00:00:00Z'
 };
 
+const STOPPED: PreviewCheck = {
+	...CHECK,
+	state: 'down',
+	reason: 'The worker will bring it back; it shows here again as soon as it answers.'
+};
+
+let answer: PreviewCheck = CHECK;
 let app: ReturnType<typeof mount> | null = null;
 beforeEach(() => {
 	(window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL(
 		'http://localhost:4310/tasks/t-1'
 	);
+	answer = CHECK;
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async () => new Response(JSON.stringify(CHECK), { status: 200 }))
+		vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 }))
 	);
 });
 afterEach(() => {
 	if (app) unmount(app);
 	app = null;
 	addressRewrites.to = null;
+	previewChecks.clear();
 	vi.unstubAllGlobals();
 	document.body.innerHTML = '';
 });
@@ -64,5 +74,31 @@ describe('LivePreview', () => {
 		expect(label).toBe('http://localhost:5173/app');
 		// Its own origin, apart from Wheelhouse's page, so it keeps its storage and scripts.
 		expect(frame.getAttribute('sandbox')).toContain('allow-same-origin');
+	});
+
+	it('shows a preview that does not answer as stopped, with no link to it, and brings it back once it answers', async () => {
+		answer = STOPPED;
+		app = mount(LivePreview, { target: document.body, props: { taskId: 't-1' } });
+		await vi.waitFor(() => expect(document.body.textContent).toContain('Preview stopped'));
+		expect(document.body.textContent).toContain('The worker will bring it back');
+		expect(document.querySelector('iframe')).toBeNull();
+		expect(document.querySelector('a')).toBeNull();
+		expect(document.body.textContent).not.toContain('refused');
+
+		answer = CHECK;
+		window.dispatchEvent(new Event('focus'));
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		expect(document.querySelector('[data-preview-notice]')).toBeNull();
+	});
+
+	it('draws a stopped preview on a card as one short line, not an empty page', async () => {
+		answer = STOPPED;
+		app = mount(LivePreview, {
+			target: document.body,
+			props: { taskId: 't-1', compact: true, toolbar: false, onopen: () => {} }
+		});
+		await vi.waitFor(() => expect(document.body.textContent).toContain('Preview stopped'));
+		expect(document.querySelector('.aspect-\\[16\\/10\\]')).toBeNull();
+		expect(document.querySelector('[data-preview-open]')).toBeNull();
 	});
 });

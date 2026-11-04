@@ -45,6 +45,7 @@
 	import { tone, textClass } from '$lib/components/wh/tone';
 	import { awaitingReview } from '$lib/review';
 	import { pullRequests } from '$lib/client/pullrequests';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
 	import {
 		DEFAULT_TAB,
 		hasDetail,
@@ -115,6 +116,11 @@
 	const shownRun = $derived(
 		pickedRun?.task === id ? pickedRun.n : (detail?.task.runs?.current ?? 1)
 	);
+
+	// Whether the reported preview answers, so the overview never links to one that has stopped.
+	$effect(() => {
+		if (task?.preview) return previewChecks.watch(task.id);
+	});
 
 	// Refetch evidence when the fleet changes, at most every 10 s.
 	$effect(() => {
@@ -569,7 +575,12 @@
 {/snippet}
 
 {#snippet previewBlock()}
-	{#if ev?.preview.available}
+	{#if ev?.preview.available && task?.preview?.url === ev.preview.value.url && previewChecks.stopped(task.id)}
+		<p class="text-sm text-muted-foreground" data-preview-stopped>
+			Preview stopped. {previewChecks.checks[task.id]?.reason ?? ''}
+		</p>
+		{@render source(ev.preview)}
+	{:else if ev?.preview.available}
 		<a
 			href={ev.preview.value.url}
 			target="_blank"
@@ -799,7 +810,11 @@
 		<div>
 			<dt class="text-muted-foreground">Preview</dt>
 			<dd>
-				{#if task.preview}<a
+				{#if task.preview && previewChecks.stopped(task.id)}<span
+						class="text-muted-foreground"
+						data-preview-stopped>Stopped; reported {ago(task.preview.reportedAt, live.now)}</span
+					>
+				{:else if task.preview}<a
 						href={task.preview.url}
 						target="_blank"
 						rel="noreferrer"

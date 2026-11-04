@@ -8,10 +8,12 @@
 		GitMerge,
 		GitPullRequest,
 		Maximize2,
+		MonitorOff,
 		MonitorPlay
 	} from '@lucide/svelte';
 	import type { ChatPreview } from '$lib/chat/previews';
 	import { ago } from '$lib/format';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
 	import { pullRequests } from '$lib/client/pullrequests';
 	import LivePreview from '$lib/components/wh/LivePreview.svelte';
 	import PreviewStudio from '$lib/components/wh/PreviewStudio.svelte';
@@ -22,7 +24,8 @@
 	 * that opens full size (with the preview helper, while the work has not
 	 * landed), and the pull request and its checks underneath. Landed work says
 	 * so. The server checks the preview is on this machine and answering before
-	 * a frame is drawn (LivePreview), and says plainly when it is not.
+	 * a frame is drawn (LivePreview); until it answers the card says the preview
+	 * has stopped, as one quiet line, and links to nothing that would not open.
 	 */
 	let {
 		preview,
@@ -32,6 +35,10 @@
 
 	const task = $derived(preview.task);
 	const url = $derived(task.preview?.url ?? null);
+	// What LivePreview below found: only a preview that answers gets Full size, and a New tab link
+	// only when there is a page to open (it answers, even if it cannot be embedded).
+	const checked = $derived(previewChecks.checks[task.id]?.state ?? null);
+	const stopped = $derived(checked === 'down');
 	// Review opens the PR in a plugin's review tab while one is on for the project, else on GitHub.
 	const prLink = $derived(task.pr ? pullRequests.review(task.projectId, task.pr) : null);
 	let full = $state(false);
@@ -55,8 +62,13 @@
 		<span
 			class="flex shrink-0 items-center gap-1 rounded px-1.5 text-xs leading-[1.15rem] font-medium {preview.landed
 				? 'bg-success/10 text-success'
-				: 'bg-sea/10 text-sea'}"
-			>{#if preview.landed}<GitMerge class="size-3" aria-hidden="true" />Landed{:else}<MonitorPlay
+				: stopped
+					? 'bg-muted text-muted-foreground'
+					: 'bg-sea/10 text-sea'}"
+			>{#if preview.landed}<GitMerge
+					class="size-3"
+					aria-hidden="true"
+				/>Landed{:else if stopped}<MonitorOff class="size-3" aria-hidden="true" />Preview stopped{:else}<MonitorPlay
 					class="size-3"
 					aria-hidden="true"
 				/>Live preview{/if}</span
@@ -112,13 +124,15 @@
 					data-review-pr><Compass class="size-3.5" aria-hidden="true" />Review</a
 				>
 			{/if}
-			<button
-				type="button"
-				class="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-accent"
-				onclick={() => (full = true)}
-				><Maximize2 class="size-3.5" aria-hidden="true" />Full size</button
-			>
-			{#if url}
+			{#if checked === 'live'}
+				<button
+					type="button"
+					class="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-accent"
+					onclick={() => (full = true)}
+					><Maximize2 class="size-3.5" aria-hidden="true" />Full size</button
+				>
+			{/if}
+			{#if url && (checked === 'live' || checked === 'blocked')}
 				<a
 					href={url}
 					target="_blank"

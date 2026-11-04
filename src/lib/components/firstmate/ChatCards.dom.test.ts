@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstmateChat } from '$lib/client/chat.svelte';
 import { inbox } from '$lib/client/inbox.svelte';
+import { previewChecks } from '$lib/client/previewchecks.svelte';
 import { discussText } from '$lib/chat/discuss';
 import { optionsFor, type AnsweredDecision, type InboxCard, type InboxView } from '$lib/inbox';
 import { taskSummary } from '../../../../tests/helpers/task-summary';
@@ -134,6 +135,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	unmount(app);
+	previewChecks.clear();
 	for (const p of firstmateChat.pending) firstmateChat.dismiss(p.id);
 	firstmateChat.records = [];
 	firstmateChat.session = null;
@@ -503,6 +505,41 @@ describe('live previews in the chat', () => {
 		expect(fetchMock.mock.calls.some(([u]) => u === '/api/tasks/lumen-share-links/preview')).toBe(
 			true
 		);
+	});
+
+	it('says a preview that does not answer has stopped, with no link to open it', async () => {
+		const task = taskSummary('lumen-share-links', 'needs-review', {
+			pr: { url: 'https://github.com/demo/lumen/pull/212', number: 212 },
+			preview: { url: 'http://127.0.0.1:5240/', reportedAt: at('09') },
+			pipeline: null
+		});
+		fetchMock.mockImplementation(async (url: string) =>
+			url === '/api/tasks/lumen-share-links/preview'
+				? Response.json({
+						url: 'http://127.0.0.1:5240/',
+						reportedAt: at('09'),
+						state: 'down',
+						reason: 'The worker will bring it back; it shows here again as soon as it answers.',
+						checkedAt: at('40')
+					})
+				: new Response('{}', { status: 200 })
+		);
+		state.page.data = { inbox: view([]) };
+		start(
+			[
+				firstmate('a1', '10', 'The share links preview is up: http://127.0.0.1:5240'),
+				done('d1', '10')
+			],
+			{ tasks: [task], projects: [{ id: 'lumen', name: 'Lumen' }] }
+		);
+		const card = document.querySelector<HTMLElement>('[data-chat-preview="live"]')!;
+		await vi.waitFor(() => expect(card.textContent).toMatch(/The worker will bring it back/));
+		expect(card.textContent).toMatch(/Preview stopped/);
+		expect(card.textContent).not.toMatch(/Full size|New tab|Live preview/);
+		expect(card.querySelector('iframe')).toBeNull();
+		expect(card.querySelector('a[href^="http://127.0.0.1"]')).toBeNull();
+		// The pull request is still there to review.
+		expect(card.textContent).toMatch(/Pull request #212/);
 	});
 
 	it('offers Review in the review tool while a plugin is on for the project, else only the PR link', () => {
