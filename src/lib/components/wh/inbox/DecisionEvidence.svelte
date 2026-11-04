@@ -184,8 +184,7 @@
 						<li>
 							{#if stopped}
 								<span class="inline-flex items-center gap-1 text-muted-foreground"
-									><MonitorOff class="size-3.5 shrink-0" aria-hidden="true" />Preview stopped; the
-									worker will bring it back</span
+									><MonitorOff class="size-3.5 shrink-0" aria-hidden="true" />Preview stopped. {previewChecks.checks[card.taskId]?.reason ?? ''}</span
 								>
 							{:else}
 								<a

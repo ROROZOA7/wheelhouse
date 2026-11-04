@@ -78,8 +78,7 @@
 			<span
 				class="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
 				data-review="preview"
-				><MonitorOff class="size-4" aria-hidden="true" />Preview stopped; the worker will bring it
-				back</span
+				><MonitorOff class="size-4" aria-hidden="true" />Preview stopped. {previewChecks.checks[task.id]?.reason ?? ''}</span
 			>
 		{:else if rv.preview}
 			<Button href={rv.preview.url} target="_blank" rel="noreferrer"

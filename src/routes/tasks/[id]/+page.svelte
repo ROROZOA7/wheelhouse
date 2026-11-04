@@ -577,7 +577,7 @@
 {#snippet previewBlock()}
 	{#if ev?.preview.available && task?.preview?.url === ev.preview.value.url && previewChecks.stopped(task.id)}
 		<p class="text-sm text-muted-foreground" data-preview-stopped>
-			Preview stopped; the worker will bring it back.
+			Preview stopped. {previewChecks.checks[task.id]?.reason ?? ''}
 		</p>
 		{@render source(ev.preview)}
 	{:else if ev?.preview.available}
