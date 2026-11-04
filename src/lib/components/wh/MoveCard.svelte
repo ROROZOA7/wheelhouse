@@ -6,6 +6,7 @@
 	import { Compass, ExternalLink, Images, MessagesSquare, MonitorPlay } from '@lucide/svelte';
 	import { hintLine } from '$lib/buildlog';
 	import { pullRequests } from '$lib/client/pullrequests';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
 	import CardPreview from './CardPreview.svelte';
 	import ShotStrip from './ShotStrip.svelte';
 	import StageTrack from './StageTrack.svelte';
@@ -16,6 +17,13 @@
 	const href = $derived(`/tasks/${encodeURIComponent(task.id)}`);
 	const review = $derived(awaitingReview(task));
 	const rv = $derived(reviewView(task));
+	// The worker's own preview is checked while the card asks for review, and not offered once it
+	// has stopped (a declared link, such as a preview deployment, is offered as it is).
+	const own = $derived(review && !!task.preview && rv.preview?.url === task.preview.url);
+	$effect(() => {
+		if (own) return previewChecks.watch(task.id);
+	});
+	const preview = $derived(own && previewChecks.stopped(task.id) ? null : rv.preview);
 	// The project's plugin review tab while one is on, else the PR on GitHub.
 	const prLink = $derived(rv.pr ? pullRequests.review(task.projectId, rv.pr) : null);
 	const who = $derived(agentLine(task.worker));
@@ -97,8 +105,8 @@
 		<div class="mt-4"><StageTrack {task} /></div>
 		<div class="mt-5 flex flex-wrap gap-2">
 			<!-- Review PR opens the PR in a plugin's review tab while one is on (GitHub stays one click away), else on GitHub. -->
-			{#if review && rv.preview}
-				<Button class="flex-1" href={rv.preview.url} target="_blank" rel="noreferrer"
+			{#if review && preview}
+				<Button class="flex-1" href={preview.url} target="_blank" rel="noreferrer"
 					>Open preview<ExternalLink /></Button
 				>
 				{#if prLink}

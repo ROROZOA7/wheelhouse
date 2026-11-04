@@ -1,17 +1,19 @@
 <script lang="ts">
-	import { live } from '$lib/client/live.svelte';
 	import { addressRewrites } from '$lib/client/addresses.svelte';
-	import { ago } from '$lib/format';
-	import { frameSandbox, type PreviewCheck } from '$lib/preview';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
+	import { frameSandbox } from '$lib/preview';
 	import { pointAt, type Pointer } from '$lib/previewhelper';
 	import { ExternalLink, Maximize2, MonitorOff, MousePointerClick, RotateCw } from '@lucide/svelte';
 
 	/**
 	 * A worker's reported preview, embedded: the server checks it is on this
-	 * machine and answering (api/tasks/[id]/preview) before a frame is shown,
-	 * and says plainly when it is not. `compact` draws it on a card, scaled down
-	 * from a desktop-sized page; `fill` takes the whole height of its container
-	 * (the full-screen view); otherwise it fills the width at a usable height.
+	 * machine and answering (api/tasks/[id]/preview, kept current by
+	 * previewChecks) before a frame is shown. One that does not answer shows a
+	 * calm "Preview stopped" with no link to it, and appears by itself once it
+	 * answers again. `compact` draws it on a card, scaled down from a
+	 * desktop-sized page (and, until it answers, as one short line); `fill`
+	 * takes the whole height of its container (the full-screen view); otherwise
+	 * it fills the width at a usable height.
 	 * `pointing` lays a crosshair over the page: a click names the part of the
 	 * page under it (onpoint), the element itself when the preview shares
 	 * Wheelhouse's origin, else the spot, which stays marked (`pin`) while the
@@ -62,31 +64,16 @@
 		onpoint?.(pointAt(el, at, { w: Math.round(box.width), h: Math.round(box.height) }), at);
 	}
 
-	const RECHECK_MS = 15_000;
 	const DESKTOP = { w: 1280, h: 800 };
 
-	let check = $state<PreviewCheck | null>(null);
-	let failed = $state(false);
 	let reloads = $state(0);
 	let width = $state(0);
 
-	async function load() {
-		try {
-			const r = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/preview`);
-			if (!r.ok) throw new Error(String(r.status));
-			check = (await r.json()) as PreviewCheck;
-			failed = false;
-		} catch {
-			failed = true;
-		}
-	}
+	$effect(() => previewChecks.watch(taskId));
 
-	$effect(() => {
-		void taskId;
-		void load();
-		const t = setInterval(load, RECHECK_MS);
-		return () => clearInterval(t);
-	});
+	const check = $derived(previewChecks.checks[taskId] ?? null);
+	const failed = $derived(!!previewChecks.failed[taskId]);
+	const live = $derived(check?.state === 'live');
 
 	const url = $derived(check?.url ?? null);
 	// The check only ever loads in the browser, so `location` is there whenever a frame is drawn.
@@ -104,17 +91,20 @@
 			<span class="min-w-0 flex-1 truncate font-mono" title={url ?? undefined}
 				>{url ?? 'Live preview'}</span
 			>
-			{#if check?.state === 'live' || check?.state === 'blocked' || check?.state === 'down'}
+			{#if live || check?.state === 'blocked' || check?.state === 'down'}
 				<button
 					type="button"
 					class="rounded p-1 hover:bg-accent hover:text-foreground"
 					onclick={() => {
 						reloads++;
-						void load();
+						void previewChecks.refresh(taskId);
 					}}
-					aria-label="Reload the preview"
-					title="Reload"><RotateCw class="size-3.5" /></button
+					aria-label={live ? 'Reload the preview' : 'Check the preview again'}
+					title={live ? 'Reload' : 'Check again'}><RotateCw class="size-3.5" /></button
 				>
+			{/if}
+			<!-- A preview that has stopped gets no link: there is nothing to open. -->
+			{#if live || check?.state === 'blocked'}
 				<a
 					href={shown}
 					target="_blank"
@@ -123,7 +113,7 @@
 					>Open in new tab<ExternalLink class="size-3.5" aria-hidden="true" /></a
 				>
 			{/if}
-			{#if onfullscreen && check?.state === 'live'}
+			{#if onfullscreen && live}
 				<button
 					type="button"
 					class="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-accent"
@@ -138,15 +128,17 @@
 		class="group relative w-full overflow-hidden bg-muted/40 {toolbar
 			? 'mt-1.5 rounded-lg border'
 			: ''} {compact
-			? 'aspect-[16/10]'
+			? live
+				? 'aspect-[16/10]'
+				: ''
 			: fill
 				? 'min-h-0 flex-1'
-				: check?.state === 'live'
+				: live
 					? 'h-[70vh] min-h-80'
 					: 'h-40'}"
 		bind:clientWidth={width}
 	>
-		{#if check?.state === 'live' && shown}
+		{#if live && shown}
 			{#key `${shown} ${reloads}`}
 				{#if compact}
 					{#if scale}
@@ -208,35 +200,50 @@
 				{/if}
 			{/key}
 		{:else}
-			<div class="grid size-full place-items-center p-4 text-center text-muted-foreground">
-				<div>
-					{#if !check && !failed}
-						<p class="text-sm">Checking the preview…</p>
-					{:else}
-						<MonitorOff class="mx-auto size-6" aria-hidden="true" />
-						<p class="mt-2 text-sm font-medium">
-							{failed
-								? 'Could not check the preview'
-								: check?.state === 'down'
-									? 'Preview not running'
-									: check?.state === 'blocked'
-										? 'Preview cannot be embedded'
-										: check?.state === 'refused'
-											? 'Preview not shown here'
-											: 'No live preview reported'}
-						</p>
-						<p class="mt-1 text-xs">
-							{failed
-								? 'Wheelhouse did not answer; it will try again.'
-								: check?.state === 'down'
-									? `Nothing answered at this address${check.reportedAt ? `; reported ${ago(check.reportedAt, live.now)}` : ''}. Wheelhouse checks again every 15 seconds.`
-									: check?.state === 'blocked'
-										? `${check.reason} Open it in a new tab instead.`
-										: (check?.reason ?? '')}
-						</p>
-					{/if}
+			{@const checking = !check && !failed}
+			{@const title = checking
+				? 'Checking the preview…'
+				: failed
+					? 'Could not check the preview'
+					: check?.state === 'down'
+						? 'Preview stopped'
+						: check?.state === 'blocked'
+							? 'Preview cannot be embedded'
+							: check?.state === 'refused'
+								? 'Preview not shown here'
+								: 'No live preview reported'}
+			{@const why = checking
+				? ''
+				: failed
+					? 'Wheelhouse did not answer; it will try again.'
+					: check?.state === 'blocked'
+						? `${check.reason} Open it in a new tab instead.`
+						: (check?.reason ?? '')}
+			{#if compact}
+				<!-- On a card, a stopped preview is one quiet line, not an empty page. -->
+				<div class="flex items-start gap-2.5 px-4 py-3 text-muted-foreground" data-preview-notice>
+					{#if !checking}<MonitorOff class="mt-0.5 size-4 shrink-0" aria-hidden="true" />{/if}
+					<p class="min-w-0 text-sm">
+						<span class="font-medium {checking ? '' : 'text-foreground'}">{title}</span>
+						{#if why}<span class="block text-xs">{why}</span>{/if}
+					</p>
 				</div>
-			</div>
+			{:else}
+				<div
+					class="grid size-full place-items-center p-4 text-center text-muted-foreground"
+					data-preview-notice
+				>
+					<div>
+						{#if checking}
+							<p class="text-sm">{title}</p>
+						{:else}
+							<MonitorOff class="mx-auto size-6" aria-hidden="true" />
+							<p class="mt-2 text-sm font-medium">{title}</p>
+							<p class="mt-1 text-xs">{why}</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </div>

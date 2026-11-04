@@ -3,12 +3,21 @@
 	import { Button } from '$lib/components/ui/button';
 	import { reviewView, type ReviewShot } from '$lib/review';
 	import { pullRequests } from '$lib/client/pullrequests';
-	import { Compass, ExternalLink, ImageOff } from '@lucide/svelte';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
+	import { Compass, ExternalLink, ImageOff, MonitorOff } from '@lucide/svelte';
 	import Lightbox from './Lightbox.svelte';
 
 	let { task, shots }: { task: TaskSummary; shots: ReviewShot[] } = $props();
 	const rv = $derived(reviewView(task, shots));
 	const prLink = $derived(rv.pr ? pullRequests.review(task.projectId, rv.pr) : null);
+
+	// The worker's own preview is checked, and not linked while it has stopped (a declared link,
+	// such as a preview deployment, is not on this machine and is linked as it is).
+	const own = $derived(!!task.preview && rv.preview?.url === task.preview.url);
+	$effect(() => {
+		if (own) return previewChecks.watch(task.id);
+	});
+	const stopped = $derived(own && previewChecks.stopped(task.id));
 
 	let enlarged = $state<number | null>(null);
 </script>
@@ -65,7 +74,14 @@
 	{/if}
 
 	<div class="mt-3 flex flex-wrap items-center gap-2 px-1 pb-1">
-		{#if rv.preview}
+		{#if stopped}
+			<span
+				class="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+				data-review="preview"
+				><MonitorOff class="size-4" aria-hidden="true" />Preview stopped; the worker will bring it
+				back</span
+			>
+		{:else if rv.preview}
 			<Button href={rv.preview.url} target="_blank" rel="noreferrer"
 				>Open preview<ExternalLink /></Button
 			>
@@ -75,7 +91,7 @@
 		{#if rv.pr && prLink}
 			<!-- A plugin's review tab while one is on for the project, else the PR on GitHub. -->
 			<Button
-				variant={rv.preview ? 'outline' : 'default'}
+				variant={rv.preview && !stopped ? 'outline' : 'default'}
 				href={prLink.href}
 				target={prLink.external ? '_blank' : undefined}
 				rel={prLink.external ? 'noreferrer' : undefined}
@@ -91,7 +107,7 @@
 		{:else}
 			<span class="text-sm text-muted-foreground" data-review="pr">{rv.prText}</span>
 		{/if}
-		{#if rv.preview}
+		{#if rv.preview && !stopped}
 			<a
 				href={rv.preview.url}
 				target="_blank"

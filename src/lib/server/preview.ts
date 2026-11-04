@@ -3,10 +3,15 @@ import type { TaskSummary } from '../types';
 
 /**
  * Whether a task's reported preview can be shown embedded: it must be a
- * loopback URL (see lib/preview.ts), answer an HTTP request, and not refuse
- * framing. A URL that is not loopback is never fetched. Each URL is checked at
- * most every few seconds however many pages ask.
+ * loopback URL (see lib/preview.ts), answer an HTTP request within a couple of
+ * seconds, and not refuse framing. A URL that is not loopback is never
+ * fetched, and a redirect is never followed. Each URL is checked at most every
+ * few seconds however many pages ask.
  */
+
+/** Why a preview that does not answer is not shown: a worker brings its preview back; landed work has none. */
+export const STOPPED = 'The worker will bring it back; it shows here again as soon as it answers.';
+export const CLOSED = 'This work has landed, so its preview is no longer running.';
 
 const TTL_MS = 5_000;
 const TIMEOUT_MS = 2_000;
@@ -29,8 +34,16 @@ export class PreviewProber {
 		this.timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
 	}
 
-	/** The check for a page served at `pageOrigin`, which is what the preview must allow to frame it. */
-	async check(preview: TaskSummary['preview'], pageOrigin: string): Promise<PreviewCheck> {
+	/**
+	 * The check for a page served at `pageOrigin`, which is what the preview
+	 * must allow to frame it. `landed` (the task's work has landed) says why a
+	 * preview that does not answer has stopped.
+	 */
+	async check(
+		preview: TaskSummary['preview'],
+		pageOrigin: string,
+		{ landed = false }: { landed?: boolean } = {}
+	): Promise<PreviewCheck> {
 		const checkedAt = new Date(this.now()).toISOString();
 		if (!preview) {
 			return {
@@ -45,13 +58,7 @@ export class PreviewProber {
 		const target = loopbackPreview(preview.url);
 		if (!target.ok) return { ...base, state: 'refused', reason: target.reason };
 		const headers = await this.probe(target.url);
-		if (!headers) {
-			return {
-				...base,
-				state: 'down',
-				reason: 'Preview not running: nothing answered at this address.'
-			};
-		}
+		if (!headers) return { ...base, state: 'down', reason: landed ? CLOSED : STOPPED };
 		const refusal = frameRefusal(headers, target.url, pageOrigin);
 		return refusal
 			? { ...base, state: 'blocked', reason: refusal }

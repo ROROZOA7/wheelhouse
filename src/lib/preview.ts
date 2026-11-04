@@ -66,8 +66,8 @@ export interface PreviewCheck {
 	reportedAt: string | null;
 	/**
 	 * live: it answered and allows framing; blocked: it answered but refuses to
-	 * be framed; down: it did not answer; refused: not a loopback URL; none:
-	 * no preview reported.
+	 * be framed; down: it did not answer (shown as stopped, with no link to
+	 * it); refused: not a loopback URL; none: no preview reported.
 	 */
 	state: 'live' | 'blocked' | 'down' | 'refused' | 'none';
 	/** Why it is not shown embedded, in plain words (null when live). */

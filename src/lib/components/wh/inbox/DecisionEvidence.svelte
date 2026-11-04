@@ -5,7 +5,15 @@
 	 * pull request, the preview and the screenshots. Shared by the decision
 	 * cards on the Decisions page and in the chat.
 	 */
-	import { ChevronDown, ExternalLink, FileText, GitPullRequest, MonitorPlay } from '@lucide/svelte';
+	import {
+		ChevronDown,
+		ExternalLink,
+		FileText,
+		GitPullRequest,
+		MonitorOff,
+		MonitorPlay
+	} from '@lucide/svelte';
+	import { previewChecks } from '$lib/client/previewchecks.svelte';
 	import { markdown } from '$lib/chat/markdown';
 	import type { InboxCard } from '$lib/inbox';
 	import LinkedText from '$lib/components/wh/LinkedText.svelte';
@@ -31,6 +39,12 @@
 			choices
 		)
 	);
+
+	// While the evidence is open its preview is checked, and not linked once it has stopped.
+	$effect(() => {
+		if (expanded && ev.preview) return previewChecks.watch(card.taskId);
+	});
+	const stopped = $derived(!!ev.preview && previewChecks.stopped(card.taskId));
 
 	/** The report the question names, read on demand. */
 	let report = $state<{ open: boolean; text: string | null; error: string | null }>({
@@ -168,13 +182,20 @@
 							>
 						</li>
 						<li>
-							<a
-								href={ev.preview}
-								target="_blank"
-								rel="noreferrer"
-								class="inline-flex items-center gap-1 break-all text-sea hover:underline"
-								><ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />{ev.preview}</a
-							>
+							{#if stopped}
+								<span class="inline-flex items-center gap-1 text-muted-foreground"
+									><MonitorOff class="size-3.5 shrink-0" aria-hidden="true" />Preview stopped; the
+									worker will bring it back</span
+								>
+							{:else}
+								<a
+									href={ev.preview}
+									target="_blank"
+									rel="noreferrer"
+									class="inline-flex items-center gap-1 break-all text-sea hover:underline"
+									><ExternalLink class="size-3.5 shrink-0" aria-hidden="true" />{ev.preview}</a
+								>
+							{/if}
 						</li>
 					{/if}
 					{#if ev.file}
