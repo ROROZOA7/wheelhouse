@@ -81,12 +81,13 @@
 					<Images class="size-3.5" aria-hidden="true" />{rv.shotsText}
 				</li>
 				<li class="flex items-center gap-1.5" data-review="preview">
-					<MonitorPlay class="size-3.5" aria-hidden="true" />{#if rv.preview}<a
-							href={rv.preview.url}
+					<MonitorPlay class="size-3.5" aria-hidden="true" />{#if preview}<a
+							href={preview.url}
 							target="_blank"
 							rel="noreferrer"
-							class="truncate text-sea hover:underline">{rv.preview.url}</a
-						>{:else}{rv.previewText}{/if}
+							class="truncate text-sea hover:underline">{preview.url}</a
+						>{:else if rv.preview}Preview stopped. {previewChecks.checks[task.id]?.reason ??
+							''}{:else}{rv.previewText}{/if}
 				</li>
 			</ul>
 		{/if}
