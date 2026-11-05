@@ -25,6 +25,7 @@ const status = (o: Partial<PluginStatus> = {}): PluginStatus => ({
 	slots: ['home.card', 'project.tab'],
 	hostRoutes: [],
 	addressRewrites: [],
+	capabilities: [],
 	enabledByDefault: false,
 	enabledWhenFile: null,
 	enabledWhenHomeFile: null,
@@ -125,6 +126,16 @@ describe('Settings → Plugins → one plugin', () => {
 		);
 		expect(text()).toContain(
 			'Addresses Answers {port}.localhost on Wheelhouse’s port; Opens addresses on this computer at {port}.localhost'
+		);
+	});
+
+	it('says what a plugin may send to Firstmate', () => {
+		show(view());
+		expect(text()).not.toContain('Sends');
+		unmount(app!);
+		show(view({ plugin: status({ capabilities: ['feedback'] }) }));
+		expect(text()).toContain(
+			'Sends Sends Firstmate feedback lists about a task, each when you click to send it'
 		);
 	});
 

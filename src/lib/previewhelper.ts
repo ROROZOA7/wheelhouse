@@ -7,7 +7,9 @@
  * turns what the captain wants changed into lines on a feedback list the
  * captain edits; nothing leaves until the captain sends the list, which then
  * goes to Firstmate as one message for the same task (`batchText`), shown in
- * the main chat as a card addressed to Firstmate (`parseBatch`).
+ * the main chat as a card addressed to Firstmate (`parseBatch`). A plugin
+ * with the `feedback` capability sends its lists in the same shape
+ * (`pluginBatchText`), attributed to it.
  *
  * The shapes the page and the server share, the prompt, and the reading of
  * the helper's answer live here, pure, so they are unit-tested.
@@ -287,15 +289,26 @@ export function pointAt(
 
 const BATCH_HEAD =
 	/^Preview feedback for (\S+) \((.+)\), sent together from the Preview tab \(([^)\n]*)\):$/;
+const PLUGIN_HEAD =
+	/^Feedback for (\S+) \((.+)\), sent together from the “([^“”\n]+)” plugin \(([a-z][a-z0-9-]*)\)(?:, about (.+))?:$/;
 const BATCH_TAIL =
 	'Firstmate: pass these to this task’s worker, the same task (start no new one). You may add notes of your own, marked as yours.';
 
 export interface Batch {
 	taskId: string;
 	title: string;
-	url: string;
+	/** The preview's address, for a list sent from the Preview tab; null for a plugin's. */
+	url: string | null;
+	/** The plugin that sent it, with what the list is about (its `subject`); null for the Preview tab's. */
+	plugin: { id: string; name: string; subject: string | null } | null;
 	items: { text: string; points: string | null }[];
 }
+
+const itemLines = (items: { text: string; points?: string | null }[]) =>
+	items.flatMap((it, i) => [
+		`${i + 1}. ${tidy(it.text)}`,
+		...(it.points && tidy(it.points) ? [`   Points at: ${tidy(it.points)}`] : [])
+	]);
 
 /** The one message the captain's list goes to Firstmate as, for the same task. */
 export function batchText(
@@ -303,21 +316,41 @@ export function batchText(
 	url: string,
 	items: { text: string; points?: Pointer | null }[]
 ): string {
-	const lines = [
-		`Preview feedback for ${task.id} (${tidy(task.title)}), sent together from the Preview tab (${url}):`
-	];
-	items.forEach((it, i) => {
-		lines.push(`${i + 1}. ${tidy(it.text)}`);
-		if (it.points) lines.push(`   Points at: ${tidy(it.points.label)}`);
-	});
-	lines.push('', BATCH_TAIL);
-	return lines.join('\n');
+	return [
+		`Preview feedback for ${task.id} (${tidy(task.title)}), sent together from the Preview tab (${url}):`,
+		...itemLines(items.map((it) => ({ text: it.text, points: it.points?.label ?? null }))),
+		'',
+		BATCH_TAIL
+	].join('\n');
+}
+
+/**
+ * A plugin's feedback list (see server/plugins/feedback.ts) as the one message
+ * it goes to Firstmate as, in the preview list's shape: about one task,
+ * attributed to the plugin that sent it, with what it is about.
+ */
+export function pluginBatchText(
+	task: { id: string; title: string },
+	plugin: { id: string; name: string },
+	subject: string | null,
+	items: { text: string; points?: string | null }[]
+): string {
+	const name = tidy(plugin.name.replace(/[“”]/g, '')) || plugin.id;
+	const about = subject && tidy(subject) ? `, about ${tidy(subject)}` : '';
+	return [
+		`Feedback for ${task.id} (${tidy(task.title)}), sent together from the “${name}” plugin (${plugin.id})${about}:`,
+		...itemLines(items),
+		'',
+		BATCH_TAIL
+	].join('\n');
 }
 
 /** A message back as the batch it carries; null when it is not one. */
 export function parseBatch(text: string): Batch | null {
 	const lines = text.replace(/\r\n?/g, '\n').split('\n');
-	const head = BATCH_HEAD.exec(lines[0] ?? '');
+	const preview = BATCH_HEAD.exec(lines[0] ?? '');
+	const plugin = preview ? null : PLUGIN_HEAD.exec(lines[0] ?? '');
+	const head = preview ?? plugin;
 	if (!head) return null;
 	const items: Batch['items'] = [];
 	for (const line of lines.slice(1)) {
@@ -329,5 +362,12 @@ export function parseBatch(text: string): Batch | null {
 		const at = /^ {3}Points at: (.+)$/.exec(line);
 		if (at && items.length) items[items.length - 1].points = at[1];
 	}
-	return items.length ? { taskId: head[1], title: head[2], url: head[3], items } : null;
+	if (!items.length) return null;
+	return {
+		taskId: head[1],
+		title: head[2],
+		url: preview ? preview[3] : null,
+		plugin: plugin ? { id: plugin[4], name: plugin[3], subject: plugin[5] ?? null } : null,
+		items
+	};
 }

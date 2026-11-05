@@ -272,12 +272,13 @@ export interface TaskSummary {
 /**
  * One change the captain asked for on a task's pull request.
  *   github      a review, a review thread (with its file and line) or a PR comment
- *   wheelhouse  preview feedback, a change asked from the old PR review, or a Decisions "Fix"
+ *   wheelhouse  preview feedback, a plugin's feedback list, a change asked from the old PR
+ *               review, or a Decisions "Fix"
  */
 export interface ChangeRequest {
 	id: string;
 	source: 'github' | 'wheelhouse';
-	kind: 'review' | 'thread' | 'comment' | 'preview' | 'pr-review' | 'decision';
+	kind: 'review' | 'thread' | 'comment' | 'preview' | 'plugin' | 'pr-review' | 'decision';
 	author: string | null;
 	/** What was asked, as written (trimmed to a bounded length). */
 	text: string;

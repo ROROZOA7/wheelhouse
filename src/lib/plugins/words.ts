@@ -1,4 +1,4 @@
-import type { PluginPageView, PluginStatus, Slot } from './types';
+import type { Capability, PluginPageView, PluginStatus, Slot } from './types';
 
 /**
  * Plugins in plain words for the Plugins pages: what a plugin adds, where it
@@ -37,6 +37,14 @@ export function addressWords(hostRoutes: string[], addressRewrites: string[]): s
 		...addressRewrites.map((t) => `Opens addresses on this computer at ${t}`)
 	];
 }
+
+const CAPABILITY_WORDS: Record<Capability, string> = {
+	feedback: 'Sends Firstmate feedback lists about a task, each when you click to send it'
+};
+
+/** What a plugin may do beyond reading, in plain words. */
+export const capabilityWords = (capabilities: Capability[]): string[] =>
+	capabilities.map((c) => CAPABILITY_WORDS[c]);
 
 /** Where a plugin is on when the captain has not said: its own rule. */
 export function defaultWords(p: PluginStatus): string {

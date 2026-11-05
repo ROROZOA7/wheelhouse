@@ -1,11 +1,11 @@
 <script lang="ts">
 	/**
-	 * A feedback list the captain sent from a task's Preview tab, in the chat:
-	 * the captain's own card, addressed to Firstmate, with each line and the
-	 * part of the page it points at, whether Firstmate has it, and its reply
-	 * (lib/chat/batches.ts).
+	 * A feedback list the captain sent from a task's Preview tab, or from a
+	 * plugin with the feedback capability, in the chat: the captain's own card,
+	 * addressed to Firstmate, with each line and what it points at, whether
+	 * Firstmate has it, and its reply (lib/chat/batches.ts).
 	 */
-	import { CircleCheck, CircleX, LoaderCircle, MonitorPlay } from '@lucide/svelte';
+	import { CircleCheck, CircleX, LoaderCircle, MonitorPlay, Puzzle } from '@lucide/svelte';
 	import type { ChatBatch } from '$lib/chat/batches';
 
 	let { batch, project = null }: { batch: ChatBatch; project?: string | null } = $props();
@@ -14,13 +14,11 @@
 		new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	const settled = $derived(batch.status.startsWith('Firstmate has it'));
 	const waiting = $derived(!batch.failed && !settled && batch.status !== 'Sent to Firstmate');
+	const from = $derived(batch.batch.plugin);
+	const label = $derived(from ? `${from.name} feedback` : 'preview feedback');
 </script>
 
-<article
-	class="msg msg-captain"
-	aria-label="Your preview feedback, {time(batch.at)}"
-	data-feedback-batch
->
+<article class="msg msg-captain" aria-label="Your {label}, {time(batch.at)}" data-feedback-batch>
 	<span class="captain-avatar">C</span>
 	<div class="min-w-0 flex-1">
 		<header class="msg-head">
@@ -32,7 +30,10 @@
 			<header class="flex flex-wrap items-center gap-x-2 gap-y-1">
 				<span
 					class="flex items-center gap-1 rounded bg-sea/10 px-1.5 text-xs leading-[1.15rem] font-medium text-sea"
-					><MonitorPlay class="size-3" aria-hidden="true" />To Firstmate · preview feedback</span
+					>{#if from}<Puzzle class="size-3" aria-hidden="true" />{:else}<MonitorPlay
+							class="size-3"
+							aria-hidden="true"
+						/>{/if}To Firstmate · {label}</span
 				>
 				{#if project}
 					<span
@@ -42,9 +43,12 @@
 				{/if}
 			</header>
 			<a
-				href="/tasks/{encodeURIComponent(batch.batch.taskId)}?tab=preview"
+				href="/tasks/{encodeURIComponent(batch.batch.taskId)}{from ? '' : '?tab=preview'}"
 				class="mt-1.5 block text-sm font-medium hover:underline">{batch.batch.title}</a
 			>
+			{#if from?.subject}
+				<p class="mt-0.5 text-xs text-muted-foreground">About {from.subject}</p>
+			{/if}
 			<ol class="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-snug">
 				{#each batch.batch.items as it, i (i)}
 					<li>

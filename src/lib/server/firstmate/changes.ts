@@ -17,8 +17,8 @@ import type { BridgeMessage, ChangeRequest, TaskRun, TaskRuns } from '../../type
  *   latest of them is the ready report everything is measured against.
  * - Changes are requested (a new run, the worker's turn) after that report when the PR
  *   gets unresolved review feedback or new commits on GitHub, when the captain
- *   sends feedback from Wheelhouse (preview feedback, a change asked from its
- *   old PR review, a Decisions "Fix"), or when the worker's latest decisive status
+ *   sends feedback from Wheelhouse (preview feedback, a plugin's feedback list,
+ *   a change asked from its old PR review, a Decisions "Fix"), or when the worker's latest decisive status
  *   line says it is working again. Plain chat does not.
  * - The next ready report ends that run and hands the PR back to the
  *   captain, whether or not the PR's head moved.
@@ -97,11 +97,11 @@ export function wheelhouseRequest(
 	if (FEEDBACK_PREFIX.test(m.text)) {
 		return { kind: 'preview', text: m.text.replace(FEEDBACK_PREFIX, '').trim(), where: null };
 	}
-	// A feedback list sent from the preview helper, one line per change.
+	// A feedback list sent from the preview helper, or by a plugin, one line per change.
 	const batch = parseBatch(m.text);
 	if (batch) {
 		return {
-			kind: 'preview',
+			kind: batch.plugin ? 'plugin' : 'preview',
 			text: batch.items.map((it, i) => `${i + 1}. ${it.text}`).join('\n'),
 			where: null
 		};

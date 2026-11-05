@@ -31,12 +31,26 @@ export function loadBundle(url: string, importer: Importer): Promise<unknown> {
 	return p;
 }
 
+/** A feedback list a plugin's element sends to Firstmate about one task. */
+export interface FeedbackList {
+	/** The task it is about; the entry's own task when left out. */
+	task?: string | null;
+	/** What the list is about, in a few words (e.g. "data/x/plan.md: Request changes"). */
+	subject?: string | null;
+	/** One change per line, with what it points at (e.g. a quote and its line). */
+	items: { text: string; points?: string | null }[];
+}
+
+/** Whether Firstmate's inbox took the list (`pending`: Wheelhouse is still confirming it), or why not. */
+export type FeedbackResult = { ok: true; pending: boolean } | { ok: false; error: string };
+
 /**
  * What the page lets a plugin's element do: read and, on the captain's click,
- * start the plugin's own companion services. The plugin is the element's
- * own, fixed when the host is made, and the page supplies the session token,
- * so the element need not handle it (it is not hidden: the element runs with
- * the page's permissions).
+ * start the plugin's own companion services, and, for a plugin with the
+ * `feedback` capability, send Firstmate a feedback list. The plugin is the
+ * element's own, fixed when the host is made, and the page supplies the
+ * session token, so the element need not handle it (it is not hidden: the
+ * element runs with the page's permissions).
  */
 export interface PluginHost {
 	readonly pluginId: string;
@@ -50,6 +64,13 @@ export interface PluginHost {
 		service: string,
 		o?: { project?: string | null; open?: string | null }
 	): Promise<ServiceView | null>;
+	/**
+	 * Send Firstmate one feedback list about a task, as the Preview tab's list
+	 * goes, attributed to this plugin. Only for a plugin whose manifest asks
+	 * for the `feedback` capability, and only from the captain's click: it is
+	 * refused, with the reason, otherwise.
+	 */
+	sendFeedback(list: FeedbackList): Promise<FeedbackResult>;
 }
 
 export interface HostDeps {
@@ -63,9 +84,23 @@ export interface HostDeps {
 		token: string,
 		open: string | null
 	) => Promise<ServiceView | null>;
+	/** Post a plugin's feedback list (`POST /api/plugins/<id>/feedback`). */
+	feedback: (
+		plugin: string,
+		body: { taskId: string; subject: string | null; items: FeedbackList['items'] },
+		token: string
+	) => Promise<FeedbackResult>;
+	/** Whether the captain has just clicked or pressed a key (the page's transient activation). */
+	clicked?: () => boolean;
 	/** The page's session token, read at the click. */
 	token: () => string;
 }
+
+/** The browser's transient activation; a browser that cannot tell is trusted. */
+const justClicked = () =>
+	typeof navigator === 'undefined' || !navigator.userActivation
+		? true
+		: navigator.userActivation.isActive;
 
 /**
  * The host API for one entry's element: services of the entry's own plugin,
@@ -83,7 +118,29 @@ export function pluginHost(entry: SlotEntry, deps: HostDeps): PluginHost {
 		service: async (service: string, o: { project?: string | null } = {}) =>
 			deps.status(ref(service, o.project)),
 		launch: async (service: string, o: { project?: string | null; open?: string | null } = {}) =>
-			deps.launch(ref(service, o.project), deps.token(), typeof o.open === 'string' ? o.open : null)
+			deps.launch(
+				ref(service, o.project),
+				deps.token(),
+				typeof o.open === 'string' ? o.open : null
+			),
+		sendFeedback: async (list: FeedbackList): Promise<FeedbackResult> => {
+			// Read at the call, before anything awaits: the send must be the captain's click.
+			if (!(deps.clicked ?? justClicked)()) {
+				return { ok: false, error: 'Feedback is sent only when the captain clicks to send it.' };
+			}
+			const l = (typeof list === 'object' && list !== null ? list : {}) as Partial<FeedbackList>;
+			const task = typeof l.task === 'string' && l.task ? l.task : (entry.taskId ?? null);
+			if (!task) return { ok: false, error: 'Name the task the feedback is about.' };
+			return deps.feedback(
+				plugin,
+				{
+					taskId: task,
+					subject: typeof l.subject === 'string' ? l.subject : null,
+					items: Array.isArray(l.items) ? l.items : []
+				},
+				deps.token()
+			);
+		}
 	});
 }
 

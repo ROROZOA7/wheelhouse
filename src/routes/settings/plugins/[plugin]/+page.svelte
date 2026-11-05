@@ -15,6 +15,7 @@
 		addressWords,
 		addsWords,
 		backToDefaultWords,
+		capabilityWords,
 		defaultWords,
 		midSentence,
 		whereOnWords
@@ -119,6 +120,7 @@
 			: 'Comes with Wheelhouse'
 	);
 	const addresses = $derived(addressWords(p.hostRoutes ?? [], p.addressRewrites ?? []));
+	const sends = $derived(capabilityWords(p.capabilities ?? []));
 	const blocked = $derived(saving || !!view.configError);
 </script>
 
@@ -294,6 +296,10 @@
 					{#if addresses.length}
 						<dt class="text-muted-foreground">Addresses</dt>
 						<dd>{addresses.join('; ')}</dd>
+					{/if}
+					{#if sends.length}
+						<dt class="text-muted-foreground">Sends</dt>
+						<dd>{sends.join('; ')}</dd>
 					{/if}
 					<dt class="text-muted-foreground">From</dt>
 					<dd class="break-words">{from}</dd>

@@ -506,3 +506,40 @@ describe('a manifest’s host routes and address rewrites', () => {
 		);
 	});
 });
+
+describe('a manifest’s capabilities', () => {
+	const withCapabilities = (capabilities: unknown) =>
+		edit((m) => Object.assign(m.wheelhouse, { capabilities }));
+	const fetch = async () => ({ available: false as const, reason: 'none' });
+	const exported = (capabilities?: unknown) => ({
+		providers: [{ id: 'p', scope: 'project', ttlMs: 1000, fetch }],
+		contributions: [
+			{ slot: 'project.tab', id: 'links', title: 'Links', provider: 'p', render: { blocks: true } },
+			{ slot: 'harbour.card', id: 'card', title: 'Card', provider: 'p', render: { blocks: true } }
+		],
+		services: [{ id: 'viewer', title: 'Viewer', scope: 'project', resolve: async () => null }],
+		...(capabilities === undefined ? {} : { capabilities })
+	});
+
+	it('reads the capabilities it asks for, and none by default', () => {
+		expect(manifest(withCapabilities(['feedback'])).wheelhouse.capabilities).toEqual(['feedback']);
+		expect(manifest().wheelhouse.capabilities).toEqual([]);
+	});
+
+	it('refuses one Wheelhouse does not know, a duplicate, or something not a list', () => {
+		expect(error(withCapabilities(['write']))).toBe(
+			'wheelhouse.capabilities[0] must be one of feedback'
+		);
+		expect(error(withCapabilities(['feedback', 'feedback']))).toBe(
+			'it declares capability "feedback" twice'
+		);
+		expect(error(withCapabilities('feedback'))).toBe('wheelhouse.capabilities must be a list');
+	});
+
+	it('takes them from the manifest alone, never from the server entry', () => {
+		const asks = fromExport(manifest(withCapabilities(['feedback'])), { default: exported() });
+		expect(asks).toMatchObject({ ok: true, plugin: { capabilities: ['feedback'] } });
+		const sneaks = fromExport(manifest(), { default: exported(['feedback']) });
+		expect(sneaks).toMatchObject({ ok: true, plugin: { capabilities: [] } });
+	});
+});

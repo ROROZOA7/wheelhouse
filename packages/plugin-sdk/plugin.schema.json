@@ -184,6 +184,12 @@
 							}
 						}
 					}
+				},
+				"capabilities": {
+					"type": "array",
+					"description": "What the plugin may do beyond reading, shown before it is installed. feedback: its elements may send Firstmate a feedback list about one task (host.sendFeedback), each on the captain's click.",
+					"uniqueItems": true,
+					"items": { "enum": ["feedback"] }
 				}
 			}
 		}

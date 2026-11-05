@@ -115,6 +115,20 @@ afterEach(() => {
 });
 
 describe('wheelhouse plugin install', () => {
+	it('shows that a plugin with the feedback capability sends Firstmate feedback lists, on your click', async () => {
+		const file = path.join(upstream, '.wheelhouse-plugin', 'plugin.json');
+		const m = JSON.parse(readFileSync(file, 'utf8'));
+		m.wheelhouse.capabilities = ['feedback'];
+		writeFileSync(file, `${JSON.stringify(m, null, '\t')}\n`);
+		git(upstream, 'commit', '-q', '-am', 'feedback');
+		answers = [false];
+		await cli('install', 'acme/links');
+		expect(lines.join('\n')).toContain(
+			'Sends:     feedback lists to Firstmate about a task, each on your click'
+		);
+		expect(existsSync(path.join(dir, 'project-links'))).toBe(false);
+	});
+
 	it('shows the manifest, asks, then installs at the exact commit', async () => {
 		const tagged = git(upstream, 'rev-parse', 'HEAD');
 		answers = [true];

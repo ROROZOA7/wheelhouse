@@ -129,6 +129,8 @@ export interface PluginPreview {
 	services: string[];
 	/** What it does with addresses, in plain words (see plugins/words.ts addressWords). */
 	addresses: string[];
+	/** What it may do beyond reading, in plain words (see plugins/words.ts capabilityWords). */
+	capabilities: string[];
 	ui: string | null;
 	/** Where it is on by default. */
 	on: string;

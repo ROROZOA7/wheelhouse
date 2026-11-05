@@ -1,6 +1,7 @@
 /**
  * Preview feedback in the chat: each list the captain sent from a task's
- * Preview tab (lib/previewhelper.ts) shows in the conversation as the
+ * Preview tab (lib/previewhelper.ts), or from a plugin with the feedback
+ * capability (server/plugins/feedback.ts), shows in the conversation as the
  * captain's card addressed to Firstmate, at the time it was sent, with
  * whether Firstmate has it and the reply Firstmate recorded. It went to
  * Firstmate's inbox as one note about the task, so it is read from

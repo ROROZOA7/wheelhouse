@@ -14,6 +14,7 @@ export const SOURCE_LABEL: Record<ChangeRequest['kind'], string> = {
 	thread: 'GitHub review comment',
 	comment: 'GitHub comment',
 	preview: 'Preview feedback',
+	plugin: 'Plugin feedback',
 	'pr-review': 'Wheelhouse PR review',
 	decision: 'Decisions inbox'
 };

@@ -5,7 +5,7 @@ import { PLUGINS_FILE, readPluginSettings, writePluginSettings } from './config'
 import { readInstalled, writeInstalled, type InstalledRecord } from './installed';
 import { manifestPath, parseManifest, type PluginManifest } from './manifest';
 import type { PluginPreview } from '../../updates';
-import { addressWords } from '../../plugins/words';
+import { addressWords, capabilityWords } from '../../plugins/words';
 import { gatherSettings, parseGiven, settingViews, type Ask } from './settings';
 
 /**
@@ -211,6 +211,9 @@ export function describeManifest(m: PluginManifest, from: string, commit: string
 					`  Addresses: opens addresses on this computer at ${w.addressRewrites.map((r) => r.to).join(', ')}`
 				]
 			: []),
+		...(w.capabilities.includes('feedback')
+			? ['  Sends:     feedback lists to Firstmate about a task, each on your click']
+			: []),
 		`  UI bundle: ${w.ui ?? 'none'}`,
 		`  On:        ${enabled}`,
 		'',
@@ -344,6 +347,7 @@ async function preview(
 			w.hostRoutes.map((r) => r.host),
 			w.addressRewrites.map((r) => r.to)
 		),
+		capabilities: capabilityWords(w.capabilities),
 		ui: w.ui,
 		on: enabledText(m),
 		settings: settingViews(w.settings, have),

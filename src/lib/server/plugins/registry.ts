@@ -6,6 +6,7 @@ import { normalizeBlocks, normalizeCards } from '../../plugins/blocks';
 import { projectTabHref, type SlotQuery } from '../../plugins/keys';
 import { validPullRequestQuery, type PullRequestTabs } from '../../plugins/pullrequests';
 import {
+	CAPABILITIES,
 	SLOT_SCOPE,
 	SLOTS,
 	type PluginPageView,
@@ -18,6 +19,7 @@ import {
 import type { Available, Project, TaskSummary } from '../../types';
 import { runBounded } from '../firstmate/exec';
 import { EMPTY_CONFIG, isEnabled, type PluginConfig } from './config';
+import type { FeedbackSender } from './feedback';
 import type { InstalledPlugin } from './loader';
 import type { SettingSpec } from './manifest';
 import { settingViews } from './settings';
@@ -226,6 +228,16 @@ export function checkManifest(p: WheelhousePlugin, taken: ReadonlySet<string>): 
 			return `address rewrite "${r.id}" sends addresses to "${r.to}", which is not a host name ending in .localhost with {port} in its first label.`;
 		}
 	}
+	if (p.capabilities !== undefined) {
+		if (!Array.isArray(p.capabilities)) return 'its capabilities are not a list.';
+		for (const c of p.capabilities) {
+			if (!CAPABILITIES.includes(c))
+				return `it asks for a capability Wheelhouse does not know, "${String(c)}".`;
+		}
+		if (new Set(p.capabilities).size !== p.capabilities.length) {
+			return 'it declares a capability twice.';
+		}
+	}
 	for (const c of p.contributions) {
 		if (!('app' in c.render)) continue;
 		const app = c.render.app as { server?: unknown; tool?: unknown } | null;
@@ -367,6 +379,7 @@ export class PluginRegistry {
 				slots,
 				hostRoutes: reason ? [] : (p.hostRoutes ?? []).map((r) => r.host),
 				addressRewrites: reason ? [] : (p.addressRewrites ?? []).map((r) => r.to),
+				capabilities: reason ? [] : [...(p.capabilities ?? [])],
 				enabledByDefault: p.enabledByDefault ?? false,
 				enabledWhenFile: p.enabledWhenFile ?? null,
 				enabledWhenHomeFile: p.enabledWhenHomeFile ?? null,
@@ -544,6 +557,36 @@ export class PluginRegistry {
 		if (!on) return null;
 		const settings = config.plugins[plugin.id]?.settings ?? {};
 		return { project, task, projects, fleet, settings, wholeFleet: homeOn !== null };
+	}
+
+	/**
+	 * Whether a plugin may send Firstmate a feedback list about a task (see
+	 * feedback.ts): it is loaded, declares the `feedback` capability and is on
+	 * where the task is, as its task slots would be; with its own name and the
+	 * task's title, which the message is written with.
+	 */
+	async feedbackSender(pluginId: string, taskId: string): Promise<FeedbackSender> {
+		const plugin = this.loaded.find((p) => p.id === pluginId);
+		if (!plugin)
+			return { ok: false, status: 404, error: `Wheelhouse has no plugin called ${pluginId}.` };
+		if (!plugin.capabilities?.includes('feedback')) {
+			return {
+				ok: false,
+				status: 403,
+				error: `The ${plugin.name} plugin cannot send feedback to Firstmate: its manifest does not ask for the feedback capability.`
+			};
+		}
+		const q = { scope: 'task', taskId } as const;
+		const w = await this.where(q);
+		if (!w?.task) return { ok: false, status: 404, error: `Wheelhouse knows no task ${taskId}.` };
+		if (!this.pluginScope(plugin, q, w)) {
+			return { ok: false, status: 403, error: `The ${plugin.name} plugin is off for ${taskId}.` };
+		}
+		return {
+			ok: true,
+			plugin: { id: plugin.id, name: plugin.name },
+			task: { id: w.task.id, title: w.task.shortTitle || w.task.title }
+		};
 	}
 
 	/**

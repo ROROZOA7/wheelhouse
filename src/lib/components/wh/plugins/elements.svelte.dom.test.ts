@@ -186,7 +186,7 @@ describe('the host API an element gets', () => {
 			view(r.plugin, r.service, r.project)
 		);
 		const launch = vi.fn(async () => null);
-		const host = pluginHost(entry(), { status, launch, token: () => 'tok' });
+		const host = pluginHost(entry(), { status, launch, feedback: vi.fn(), token: () => 'tok' });
 		expect(host.pluginId).toBe('acme');
 		expect(Object.isFrozen(host)).toBe(true);
 
@@ -204,6 +204,114 @@ describe('the host API an element gets', () => {
 			[{ plugin: 'acme', service: 'ui', project: 'docs' }, 'tok', null]
 		]);
 		await expect(host.launch('')).rejects.toThrow('Name a service.');
+	});
+
+	it('sends a feedback list about the entry’s task, or the one named, only on the captain’s click', async () => {
+		const feedback = vi.fn(async () => ({ ok: true as const, pending: false }));
+		let clicked = false;
+		const deps = {
+			status: vi.fn(),
+			launch: vi.fn(),
+			feedback,
+			clicked: () => clicked,
+			token: () => 'tok'
+		};
+		const host = pluginHost(entry({ slot: 'task.section', taskId: 'lumen-plan' }), deps);
+		const list = {
+			subject: 'plan.md',
+			items: [{ text: 'Add a rollback step', points: 'line 12' }]
+		};
+
+		expect(await host.sendFeedback(list)).toEqual({
+			ok: false,
+			error: 'Feedback is sent only when the captain clicks to send it.'
+		});
+		expect(feedback).not.toHaveBeenCalled();
+
+		clicked = true;
+		expect(await host.sendFeedback(list)).toEqual({ ok: true, pending: false });
+		await host.sendFeedback({ ...list, task: 'lumen-other' });
+		// A plugin named in the list is not the element's to choose.
+		await host.sendFeedback({ ...list, plugin: 'docket' } as never);
+		expect(feedback.mock.calls).toEqual([
+			['acme', { taskId: 'lumen-plan', subject: 'plan.md', items: list.items }, 'tok'],
+			['acme', { taskId: 'lumen-other', subject: 'plan.md', items: list.items }, 'tok'],
+			['acme', { taskId: 'lumen-plan', subject: 'plan.md', items: list.items }, 'tok']
+		]);
+
+		const fleetHost = pluginHost(entry(), deps);
+		expect(await fleetHost.sendFeedback(list)).toEqual({
+			ok: false,
+			error: 'Name the task the feedback is about.'
+		});
+	});
+
+	it('posts the list to its own plugin’s feedback address with the session token', async () => {
+		const { postFeedback } = await import('$lib/client/feedback');
+		const calls: { url: string; init: RequestInit }[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init: RequestInit) => {
+				calls.push({ url, init });
+				return calls.length === 1
+					? new Response('{}', { status: 202 })
+					: new Response(JSON.stringify({ message: 'The Acme plugin is off for t.' }), {
+							status: 403
+						});
+			})
+		);
+		const body = { taskId: 't', subject: null, items: [{ text: 'One' }] };
+		expect(await postFeedback('acme', body, 'tok', 'wh-1')).toEqual({ ok: true, pending: true });
+		expect(calls[0].url).toBe('/api/plugins/acme/feedback');
+		expect(calls[0].init.method).toBe('POST');
+		expect(calls[0].init.headers).toMatchObject({
+			'idempotency-key': 'wh-1',
+			'x-wheelhouse-session': 'tok'
+		});
+		expect(JSON.parse(String(calls[0].init.body))).toEqual(body);
+		expect(await postFeedback('acme', body, 'tok')).toEqual({
+			ok: false,
+			error: 'The Acme plugin is off for t.'
+		});
+		vi.unstubAllGlobals();
+	});
+
+	it('reports a list Firstmate refused as not sent, with the reason', async () => {
+		const { postFeedback } = await import('$lib/client/feedback');
+		const answers = [
+			new Response(
+				JSON.stringify({
+					replay: false,
+					message: { delivery: 'failed', deliveryDetail: 'fm-inbox.sh exited 1' }
+				}),
+				{ status: 201 }
+			),
+			new Response(JSON.stringify({ replay: true, message: { delivery: 'failed' } }), {
+				status: 200
+			}),
+			new Response(JSON.stringify({ replay: false, message: { delivery: 'delivered' } }), {
+				status: 201
+			}),
+			new Response(JSON.stringify({ replay: false, message: { delivery: 'uncertain' } }), {
+				status: 202
+			})
+		];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => answers.shift())
+		);
+		const body = { taskId: 't', subject: null, items: [{ text: 'One' }] };
+		expect(await postFeedback('acme', body, 'tok')).toEqual({
+			ok: false,
+			error: 'fm-inbox.sh exited 1'
+		});
+		expect(await postFeedback('acme', body, 'tok')).toEqual({
+			ok: false,
+			error: 'Firstmate did not take the list.'
+		});
+		expect(await postFeedback('acme', body, 'tok')).toEqual({ ok: true, pending: false });
+		expect(await postFeedback('acme', body, 'tok')).toEqual({ ok: true, pending: true });
+		vi.unstubAllGlobals();
 	});
 
 	it('is set on the mounted element, starts its service with the session token, and never shows the token', async () => {

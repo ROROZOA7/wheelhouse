@@ -1243,3 +1243,59 @@ describe('project tabs that open a pull request', () => {
 		expect(await reg.pullRequestTabs()).toEqual({});
 	});
 });
+
+describe('the feedback capability', () => {
+	const config = (c: PluginConfig) => async () => ({ config: c, error: null });
+	const sender = (o: Partial<WheelhousePlugin> = {}, h: Partial<RegistryHost> = {}) =>
+		new PluginRegistry(
+			[plugin({ id: 'plan', name: 'Plan review', capabilities: ['feedback'], ...o })],
+			host({
+				fleet: () => ({
+					projects: [project('alpha'), project('beta')],
+					tasks: [task('a-1', 'alpha', { shortTitle: 'Plan it' })]
+				}),
+				...h
+			})
+		);
+
+	it('lists what a plugin may do beyond reading', () => {
+		expect(sender().status()[0].capabilities).toEqual(['feedback']);
+		expect(new PluginRegistry([simple('plain', {})], host()).status()[0].capabilities).toEqual([]);
+	});
+
+	it('refuses a capability it does not know, or one declared twice', () => {
+		expect(
+			checkManifest(plugin({ id: 'x', capabilities: ['write' as never] }), new Set())
+		).toContain('a capability Wheelhouse does not know, "write"');
+		expect(
+			checkManifest(plugin({ id: 'x', capabilities: ['feedback', 'feedback'] }), new Set())
+		).toContain('declares a capability twice');
+	});
+
+	it('lets a plugin with it send about a task it is on for, with its name and the task’s title', async () => {
+		expect(await sender().feedbackSender('plan', 'a-1')).toEqual({
+			ok: true,
+			plugin: { id: 'plan', name: 'Plan review' },
+			task: { id: 'a-1', title: 'Plan it' }
+		});
+	});
+
+	it('refuses a plugin without it, one off for the task’s project, and a task it does not know', async () => {
+		expect(await sender({ capabilities: [] }).feedbackSender('plan', 'a-1')).toMatchObject({
+			ok: false,
+			status: 403,
+			error: expect.stringContaining('does not ask for the feedback capability')
+		});
+		const off = sender(
+			{},
+			{ config: config({ plugins: { plan: { projects: { alpha: false } } } }) }
+		);
+		expect(await off.feedbackSender('plan', 'a-1')).toEqual({
+			ok: false,
+			status: 403,
+			error: 'The Plan review plugin is off for a-1.'
+		});
+		expect(await sender().feedbackSender('plan', 'nope')).toMatchObject({ ok: false, status: 404 });
+		expect(await sender().feedbackSender('other', 'a-1')).toMatchObject({ ok: false, status: 404 });
+	});
+});

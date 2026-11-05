@@ -1,4 +1,4 @@
-import { batchText } from '../../previewhelper';
+import { batchText, pluginBatchText } from '../../previewhelper';
 import { describe, expect, it } from 'vitest';
 import {
 	changeRoute,
@@ -118,6 +118,21 @@ describe('wheelhouseRequest', () => {
 			text: '1. Bigger\n2. Calmer header',
 			where: null
 		});
+	});
+
+	it('reads a plugin’s feedback list as one plugin request, and counts it as a change request', () => {
+		const text = pluginBatchText(
+			{ id: 'a', title: 'Plan' },
+			{ id: 'plan-review', name: 'Plan review' },
+			'plan.md',
+			[{ text: 'Add a rollback step', points: 'line 12' }]
+		);
+		expect(wheelhouseRequest(message({ at: 1, text }))).toEqual({
+			kind: 'plugin',
+			text: '1. Add a rollback step',
+			where: null
+		});
+		expect(isChangeRequest({ taskId: 'a', text })).toBe(true);
 	});
 
 	it('reads preview feedback, a change asked from the old PR review and a Decisions Fix', () => {

@@ -21,6 +21,16 @@ export const SLOTS = [
 
 export type Slot = (typeof SLOTS)[number];
 
+/**
+ * What a plugin may do beyond reading, each declared in its manifest and so
+ * shown to the captain before it is installed. `feedback`: send Firstmate a
+ * feedback list about one task, in the preview feedback list's shape, on the
+ * captain's click (see server/plugins/feedback.ts).
+ */
+export const CAPABILITIES = ['feedback'] as const;
+
+export type Capability = (typeof CAPABILITIES)[number];
+
 /** What a slot is about, and so which providers can fill it. */
 export type Scope = 'fleet' | 'project' | 'task';
 
@@ -135,6 +145,8 @@ export interface PluginStatus {
 	hostRoutes: string[];
 	/** Host templates it shows addresses on this computer at while it is on. */
 	addressRewrites: string[];
+	/** What it may do beyond reading (see CAPABILITIES). */
+	capabilities: Capability[];
 	enabledByDefault: boolean;
 	/** On by default only for projects whose clone has this file. */
 	enabledWhenFile: string | null;
