@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BridgeMessage, Delivery } from '../types';
 import type { Item, Part } from './fold';
 import { answerText, chatForms, formAtEnd, parseAnswer } from './forms';
 
@@ -10,17 +11,31 @@ const user = (id: string, text: string): Item => ({
 	queued: false,
 	command: false
 });
-const turn = (id: string, parts: Part[]): Item => ({
+const turn = (id: string, parts: Part[], at = '2026-11-05T09:00:05.000Z'): Item => ({
 	kind: 'turn',
 	id,
 	parts,
-	at: '2026-11-05T09:00:05.000Z',
+	at,
 	durationMs: null,
 	done: true,
 	interrupted: false,
 	trigger: 'captain'
 });
 const text = (id: string, t: string): Part => ({ kind: 'text', id, text: t });
+/** A message from the page not shown yet, sent when `after` was the chat's last item. */
+const sending = (t: string, after: string | null) => ({ text: t, after });
+/** A note Wheelhouse sent to Firstmate's inbox. */
+const note = (t: string, submittedAt: string, delivery: Delivery = 'delivered'): BridgeMessage => ({
+	requestId: `wh-${submittedAt}`,
+	text: t,
+	taskId: null,
+	submittedAt,
+	delivery,
+	deliveryDetail: null,
+	acknowledged: null,
+	noteId: null,
+	reply: null
+});
 
 const SHIP =
 	'Two ways to go.\n\n```decision-form\nWhich should ship?\n- Welcome page, tour behind a link: a "Show me around" link opens it (recommended)\n- Welcome page only\n- Three-step tour\n```';
@@ -108,7 +123,9 @@ describe('chatForms', () => {
 			turn('t2', [text('p2', 'About a day.')])
 		];
 		expect(chatForms(items, new Set()).get('p1')?.active).toBe(true);
-		expect(chatForms(items, new Set(), [SHIP_ANSWER('Three-step tour')]).get('p1')).toMatchObject({
+		expect(
+			chatForms(items, new Set(), [sending(SHIP_ANSWER('Three-step tour'), 't2')]).get('p1')
+		).toMatchObject({
 			decided: 'Three-step tour',
 			active: false
 		});
@@ -127,7 +144,7 @@ describe('chatForms', () => {
 	it('answers the form an answer queued during a busy turn names, not a later one that turn asked', () => {
 		// The captain answers p1 while the turn goes on; the turn then asks p2, and the answer lands after it.
 		const items = [turn('t1', [text('p1', SHIP), text('p2', MERGE)])];
-		const queued = chatForms(items, new Set(), [SHIP_ANSWER('Welcome page only')]);
+		const queued = chatForms(items, new Set(), [sending(SHIP_ANSWER('Welcome page only'), 't1')]);
 		expect(queued.get('p1')).toMatchObject({ decided: 'Welcome page only', active: false });
 		expect(queued.get('p2')).toMatchObject({ decided: null, active: true });
 		const landed = [...items, user('u1', SHIP_ANSWER('Welcome page only'))];
@@ -180,7 +197,7 @@ describe('chatForms', () => {
 		it('gives a queued answer to the latest asking when one busy turn asks the same question twice', () => {
 			const items = [turn('t1', [text('p1', MERGE), text('p2', again)])];
 			for (const forms of [
-				chatForms(items, new Set(), [MERGE_ANSWER('Merge')]),
+				chatForms(items, new Set(), [sending(MERGE_ANSWER('Merge'), 't1')]),
 				chatForms([...items, user('u1', MERGE_ANSWER('Merge'))], new Set())
 			]) {
 				expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
@@ -191,7 +208,7 @@ describe('chatForms', () => {
 		it('answers a later form and leaves the one it replaced closed', () => {
 			const items = [turn('t1', [text('p1', MERGE)]), turn('t2', [text('p2', again)])];
 			for (const forms of [
-				chatForms(items, new Set(), [MERGE_ANSWER('Merge')]),
+				chatForms(items, new Set(), [sending(MERGE_ANSWER('Merge'), 't2')]),
 				chatForms([...items, user('u1', MERGE_ANSWER('Merge'))], new Set())
 			]) {
 				expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
@@ -219,6 +236,89 @@ describe('chatForms', () => {
 			);
 			expect(unnamed.get('p0')?.decided).toBe('Merge');
 			expect(unnamed.get('p1')).toMatchObject({ decided: null, active: true });
+		});
+	});
+
+	describe('an answer stays answered after Firstmate’s next turn', () => {
+		const T0 = '2026-11-05T09:00:00.000Z';
+		const T1 = '2026-11-05T09:01:00.000Z';
+		const T2 = '2026-11-05T09:02:00.000Z';
+
+		it('from the transcript, for an answer typed into the session', () => {
+			const items = [
+				turn('t1', [text('p1', MERGE)], T0),
+				user('u1', MERGE_ANSWER('Merge')),
+				turn('t2', [text('r1', 'Merging now.')], T2)
+			];
+			expect(chatForms(items, new Set()).get('p1')).toMatchObject({
+				decided: 'Merge',
+				active: false
+			});
+		});
+
+		it('from the inbox record, for an answer sent to Firstmate’s inbox', () => {
+			const items = [turn('t1', [text('p1', MERGE)], T0), turn('t2', [text('r1', 'Merging.')], T2)];
+			expect(
+				chatForms(items, new Set(), [], [note(MERGE_ANSWER('Merge'), T1)]).get('p1')
+			).toMatchObject({ decided: 'Merge', active: false });
+		});
+
+		it('but not from an inbox note whose delivery failed', () => {
+			const items = [turn('t1', [text('p1', MERGE)], T0)];
+			expect(
+				chatForms(items, new Set(), [], [note(MERGE_ANSWER('Merge'), T1, 'failed')]).get('p1')
+			).toMatchObject({ decided: null, active: true });
+		});
+
+		it('never from an inbox note sent before the form was asked', () => {
+			const items = [
+				turn('t0', [text('p0', MERGE)], T0),
+				turn('t1', [text('p1', `Again.\n\n${MERGE}`)], T2)
+			];
+			const forms = chatForms(items, new Set(), [], [note(MERGE_ANSWER('Merge'), T1)]);
+			expect(forms.get('p0')?.decided).toBe('Merge');
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: true });
+		});
+	});
+
+	describe('a message still being sent counts once its own record shows it', () => {
+		const again = `Still green.\n\n${MERGE}`;
+
+		it('leaves out a pending copy the transcript already shows', () => {
+			const items = [
+				turn('t1', [text('p1', MERGE)]),
+				turn('t2', [text('p2', again)]),
+				user('u1', MERGE_ANSWER('Merge'))
+			];
+			const forms = chatForms(items, new Set(), [sending(MERGE_ANSWER('Merge'), 't2')]);
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
+			expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
+		});
+
+		it('leaves out a pending copy the inbox record already shows', () => {
+			const items = [
+				turn('t1', [text('p1', MERGE)], '2026-11-05T09:00:00.000Z'),
+				turn('t2', [text('p2', again)], '2026-11-05T09:01:00.000Z')
+			];
+			const forms = chatForms(
+				items,
+				new Set(),
+				[sending(MERGE_ANSWER('Merge'), 't2')],
+				[note(MERGE_ANSWER('Merge'), '2026-11-05T09:02:00.000Z')]
+			);
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
+			expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
+		});
+
+		it('still counts a pending copy when only an earlier identical answer shows', () => {
+			const items = [
+				turn('t1', [text('p1', MERGE)]),
+				user('u1', MERGE_ANSWER('Merge')),
+				turn('t2', [text('p2', again)])
+			];
+			const forms = chatForms(items, new Set(), [sending(MERGE_ANSWER('Merge'), 't2')]);
+			expect(forms.get('p1')?.decided).toBe('Merge');
+			expect(forms.get('p2')?.decided).toBe('Merge');
 		});
 	});
 });

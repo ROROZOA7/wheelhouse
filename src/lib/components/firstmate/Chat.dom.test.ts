@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { page } from '$app/state';
 import { firstmateChat } from '$lib/client/chat.svelte';
 
 vi.mock('$app/state', () => ({ page: { data: {} } }));
@@ -47,6 +48,11 @@ beforeEach(() => {
 		record('d1', '11', { type: 'system', subtype: 'turn_duration', durationMs: 1000 }),
 		captain('u2', '20', REPLY)
 	];
+	open();
+});
+
+/** Mounts the chat afresh, as a reload of the page does. */
+const open = () => {
 	document.body.innerHTML = '';
 	app = mount(Chat, {
 		target: document.body,
@@ -59,13 +65,14 @@ beforeEach(() => {
 		}
 	});
 	flushSync();
-});
+};
 
 afterEach(() => {
 	unmount(app);
 	for (const p of firstmateChat.pending) firstmateChat.dismiss(p.id);
 	firstmateChat.records = [];
 	firstmateChat.session = null;
+	delete (page.data as Record<string, unknown>).messages;
 	vi.unstubAllGlobals();
 });
 
@@ -223,6 +230,52 @@ describe('decision forms in the conversation', () => {
 		const [form] = forms();
 		expect(form.dataset.chatForm).toBe('answered');
 		expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Not yet');
+	});
+
+	describe('stays answered after Firstmate’s next turn, and after a reload', () => {
+		const ended = (id: string, at: string) =>
+			record(id, at, { type: 'system', subtype: 'turn_duration', durationMs: 1000 });
+		const answered = () => {
+			const [form] = forms();
+			expect(form.dataset.chatForm).toBe('answered');
+			expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Merge');
+		};
+
+		it('from the transcript, for an answer typed into the session', () => {
+			show(
+				firstmate('a1', '11', MERGE),
+				ended('d1', '11'),
+				captain('u2', '12', 'Decided: Merge — for: “Merge it now?”'),
+				firstmate('a2', '13', 'Merging now.')
+			);
+			answered();
+			unmount(app);
+			open();
+			answered();
+		});
+
+		it('from Wheelhouse’s record of the inbox note, for an answer sent there', () => {
+			(page.data as Record<string, unknown>).messages = {
+				messages: [
+					{
+						requestId: 'wh-1',
+						text: 'Decided: Merge — for: “Merge it now?”',
+						taskId: null,
+						submittedAt: '2026-10-30T16:12:00.000Z',
+						delivery: 'delivered',
+						deliveryDetail: null,
+						acknowledged: true,
+						noteId: 'n1',
+						reply: null
+					}
+				]
+			};
+			show(firstmate('a1', '11', MERGE), ended('d1', '11'), firstmate('a2', '13', 'Merging now.'));
+			answered();
+			unmount(app);
+			open();
+			answered();
+		});
 	});
 
 	it('sends a written answer in the captain’s words', async () => {

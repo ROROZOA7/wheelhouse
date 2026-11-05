@@ -12,23 +12,29 @@
  *
  * A form without a question line is answered with `Decided: <words>` alone.
  *
- * The transcript and the captain's messages still being sent (which come
- * after it) are the only record of what was answered: the page keeps none of
- * its own, so a message counts once, for one form, and a sent answer that is
- * discarded leaves its form open again. An answer naming a question goes to
- * the latest form asked before it with that question that is still waiting,
- * so a form keeps its own answer even when a later one with another question
- * was asked first (an answer queued while Firstmate's turn went on); when the
- * same question was asked again, the latest asking takes it. An answer naming no question goes to
- * the latest form asked before it, only when that form is still waiting and
- * the words are one of its options (any words for a written form). So every
- * waiting form can be answered while it is the latest form with its question;
- * a form without a question only while it is the latest form of all. Any
- * other waiting form was replaced by a later one and stays closed. Pure, so
- * it is unit-tested.
+ * What was answered is read only from the conversation's own records: the
+ * transcript for answers typed into the session, Wheelhouse's record of the
+ * notes it sent to Firstmate's inbox (placed among the transcript's items by
+ * when they were sent) for answers sent there while Firstmate runs in
+ * another terminal, and the captain's messages still being sent, until one
+ * of those shows them. The page keeps no record of its own, so a message
+ * counts once, for one form, and an answer that failed and was discarded
+ * leaves its form open again. An answer naming a question goes to the latest
+ * form asked before it with that question that is still waiting, so a form
+ * keeps its own answer even when a later one with another question was asked
+ * first (an answer queued while Firstmate's turn went on); when the same
+ * question was asked again, the latest asking takes it. An answer naming no
+ * question goes to the latest form asked before it, only when that form is
+ * still waiting and the words are one of its options (any words for a
+ * written form). So every waiting form can be answered while it is the
+ * latest form with its question; a form without a question only while it is
+ * the latest form of all. Any other waiting form was replaced by a later one
+ * and stays closed. Pure, so it is unit-tested.
  */
 import { DECIDED_MAX, formIn, type DecisionForm, type FormAnswer } from '../decisionform';
+import type { BridgeMessage } from '../types';
 import type { Item } from './fold';
+import type { Pending } from './outbox';
 
 /** A form Firstmate asked in the conversation, and where it stands. */
 export interface ChatForm {
@@ -93,14 +99,43 @@ const fits = (form: DecisionForm, words: string) =>
 /**
  * The forms Firstmate asked in the conversation, by the id of the reply part
  * that asks each. `hidden` are the items in a decision's thread, whose forms
- * belong to that decision; `pending` the texts of the captain's messages not
- * in the transcript yet, which come after everything in it.
+ * belong to that decision; `inbox` Wheelhouse's record of the notes it sent
+ * to Firstmate's inbox, which count from when they were sent unless their
+ * delivery failed; `pending` the captain's messages from this page not in
+ * either yet, which come after everything. A pending message is left out once
+ * the transcript or the inbox record shows it after the point it was sent.
  */
 export function chatForms(
 	items: Item[],
 	hidden: ReadonlySet<string>,
-	pending: string[] = []
+	pending: Pick<Pending, 'text' | 'after'>[] = [],
+	inbox: BridgeMessage[] = []
 ): Map<string, ChatForm> {
+	// The conversation in order: its items, with the inbox notes placed among them by when they were sent.
+	const said: { id: string | null; text: string | null; item: Item | null }[] = [];
+	const notes = inbox.filter((m) => m.delivery !== 'failed');
+	let n = 0;
+	for (const it of items) {
+		const at = Date.parse(it.at);
+		while (n < notes.length && Date.parse(notes[n].submittedAt) < at) {
+			said.push({ id: null, text: notes[n++].text, item: null });
+		}
+		if (hidden.has(it.id)) continue;
+		said.push({ id: it.id, text: it.kind === 'user' ? it.text : null, item: it });
+	}
+	for (const m of notes.slice(n)) said.push({ id: null, text: m.text, item: null });
+
+	const shown = new Set<number>();
+	const unshown = pending.filter((p) => {
+		const from = said.findIndex((x) => x.id !== null && x.id === p.after);
+		const echo = said.findIndex(
+			(x, i) => i > from && !shown.has(i) && x.text !== null && tidy(x.text) === tidy(p.text)
+		);
+		if (echo < 0) return true;
+		shown.add(echo);
+		return false;
+	});
+
 	const out = new Map<string, ChatForm>();
 	// Every form asked so far, oldest first.
 	const asked: ChatForm[] = [];
@@ -112,11 +147,10 @@ export function chatForms(
 			: asked.at(-1);
 		if (to && to.decided === null && (a.question || fits(to.form, a.words))) to.decided = a.words;
 	};
-	for (const it of items) {
-		if (hidden.has(it.id)) continue;
-		if (it.kind === 'user') answer(it.text);
-		if (it.kind !== 'turn') continue;
-		for (const p of it.parts) {
+	for (const { text, item } of said) {
+		if (text !== null) answer(text);
+		if (item?.kind !== 'turn') continue;
+		for (const p of item.parts) {
 			const reply = p.kind === 'text' ? formAtEnd(p.text) : null;
 			if (!reply) continue;
 			const f: ChatForm = { ...reply, decided: null, active: false };
@@ -124,7 +158,7 @@ export function chatForms(
 			asked.push(f);
 		}
 	}
-	for (const text of pending) answer(text);
+	for (const p of unshown) answer(p.text);
 	const seen = new Set<string>();
 	for (const f of asked.toReversed()) {
 		const key = f.form.prompt ? tidy(f.form.prompt) : null;

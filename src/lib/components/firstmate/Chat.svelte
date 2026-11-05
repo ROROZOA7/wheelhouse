@@ -218,13 +218,9 @@
 	const projectName = (id: string | null) =>
 		!id || id === 'unassigned' ? null : (projects.find((p) => p.id === id)?.name ?? id);
 
-	// Forms Firstmate asked in the conversation, answered from the transcript and messages being sent.
+	// Forms Firstmate asked in the conversation, answered from the transcript, the inbox record and messages being sent.
 	const forms = $derived(
-		chatForms(
-			items,
-			discussed.hidden,
-			firstmateChat.pending.map((p) => p.text)
-		)
+		chatForms(items, discussed.hidden, firstmateChat.pending, currentMessages()?.messages ?? [])
 	);
 	/** A reply's words as its bubble shows them: without the form it ends with. */
 	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
