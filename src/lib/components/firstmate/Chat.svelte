@@ -231,13 +231,27 @@
 	/** A reply's words as its bubble shows them: without the form it ends with. */
 	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
 
+	// Answers sent from this page, by message text: the reply part each answers and the words decided.
+	const answers: Record<string, { partId: string; words: string }> = {};
+	const delivered = (text: string) => {
+		const a = answers[text];
+		if (a) decidedHere = { ...decidedHere, [a.partId]: a.words };
+	};
+
 	async function decide(partId: string, a: FormAnswer, note: string | null) {
 		const asked = forms.get(partId);
 		const text = asked ? answerText(asked.form, a, note) : '';
 		// Never typed into an open menu, where Enter would choose for the captain.
 		if (!text || !via || held) return;
+		answers[text] = { partId, words: a.decided ?? '' };
 		const r = await firstmateChat.send(text, via, token, working && !waitingOnAnswer);
-		if (r.ok) decidedHere = { ...decidedHere, [partId]: a.decided ?? '' };
+		if (r.ok) delivered(text);
+	}
+
+	async function retry(id: string) {
+		const text = firstmateChat.pending.find((p) => p.id === id)?.text;
+		const r = await firstmateChat.retry(id, token, working && !waitingOnAnswer);
+		if (text && r?.ok) delivered(text);
 	}
 
 	function ask(d: Decision, text: string) {
@@ -566,7 +580,7 @@
 					holding = true;
 				}}
 				onAsk={(text) => ask(d, text)}
-				onRetry={(id) => firstmateChat.retry(id, token, working && !waitingOnAnswer)}
+				onRetry={(id) => void retry(id)}
 				onDismiss={(id) => firstmateChat.dismiss(id)}
 			/>
 		</div>
@@ -998,7 +1012,7 @@
 									<CircleX class="size-3.5" aria-hidden="true" />{pendingLabel(p)}
 									<button
 										class="ml-1 inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-muted"
-										onclick={() => firstmateChat.retry(p.id, token, working && !waitingOnAnswer)}
+										onclick={() => void retry(p.id)}
 										><RotateCw class="size-3" aria-hidden="true" />Retry</button
 									>
 									<button

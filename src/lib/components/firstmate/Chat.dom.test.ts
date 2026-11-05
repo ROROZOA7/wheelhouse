@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { page } from '$app/state';
 import { firstmateChat } from '$lib/client/chat.svelte';
 
 vi.mock('$app/state', () => ({ page: { data: {} } }));
@@ -300,6 +301,36 @@ describe('decision forms in the conversation', () => {
 		firstmateChat.dismiss(firstmateChat.pending[0].id);
 		flushSync();
 		expect(forms()[0].dataset.chatForm).toBe('open');
+	});
+
+	it('keeps an inbox answer decided once a retry delivers it and Firstmate starts a turn', async () => {
+		(page.data as Record<string, unknown>).health = { messaging: { available: true } };
+		let tries = 0;
+		fetchMock.mockImplementation(async () =>
+			++tries === 1
+				? new Response('{"message":"down"}', { status: 500 })
+				: new Response('{}', { status: 200 })
+		);
+		firstmateChat.session = { ...firstmateChat.session!, state: 'external', canSend: false };
+		show(
+			firstmate('a1', '11', MERGE),
+			record('d1', '11', { type: 'system', subtype: 'turn_duration', durationMs: 1000 })
+		);
+		[...forms()[0].querySelectorAll('button')]
+			.find((b) => b.textContent!.startsWith('Merge'))!
+			.click();
+		flushSync();
+		await vi.waitFor(() => expect(firstmateChat.pending[0]?.state).toBe('failed'));
+		flushSync();
+		[...document.querySelectorAll('button')]
+			.find((b) => b.textContent!.trim() === 'Retry')!
+			.click();
+		await vi.waitFor(() => expect(firstmateChat.pending[0]?.state).toBe('delivered'));
+		firstmateChat.records = [...firstmateChat.records, firstmate('a2', '13', 'Merging now.')];
+		flushSync();
+		expect(firstmateChat.pending).toHaveLength(0);
+		expect(forms()[0].dataset.chatForm).toBe('answered');
+		delete (page.data as Record<string, unknown>).health;
 	});
 
 	it('keeps an example block earlier in the reply in its words', () => {
