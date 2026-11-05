@@ -103,7 +103,8 @@ const fits = (form: DecisionForm, words: string) =>
  * to Firstmate's inbox, which count from when they were sent unless their
  * delivery failed; `pending` the captain's messages from this page not in
  * either yet, which come after everything. A pending message is left out once
- * the transcript or the inbox record shows it after the point it was sent.
+ * the transcript or the inbox record shows it after the point it was sent,
+ * including as a failed note, which answers nothing.
  */
 export function chatForms(
 	items: Item[],
@@ -112,18 +113,22 @@ export function chatForms(
 	inbox: BridgeMessage[] = []
 ): Map<string, ChatForm> {
 	// The conversation in order: its items, with the inbox notes placed among them by when they were sent.
-	const said: { id: string | null; text: string | null; item: Item | null }[] = [];
-	const notes = inbox.filter((m) => m.delivery !== 'failed');
+	// A failed note still shows its pending copy, so that copy is left out, but answers nothing.
+	const said: { id: string | null; text: string | null; item: Item | null; failed: boolean }[] = [];
+	const note = (m: BridgeMessage) => ({
+		id: null,
+		text: m.text,
+		item: null,
+		failed: m.delivery === 'failed'
+	});
 	let n = 0;
 	for (const it of items) {
 		const at = Date.parse(it.at);
-		while (n < notes.length && Date.parse(notes[n].submittedAt) < at) {
-			said.push({ id: null, text: notes[n++].text, item: null });
-		}
+		while (n < inbox.length && Date.parse(inbox[n].submittedAt) < at) said.push(note(inbox[n++]));
 		if (hidden.has(it.id)) continue;
-		said.push({ id: it.id, text: it.kind === 'user' ? it.text : null, item: it });
+		said.push({ id: it.id, text: it.kind === 'user' ? it.text : null, item: it, failed: false });
 	}
-	for (const m of notes.slice(n)) said.push({ id: null, text: m.text, item: null });
+	for (const m of inbox.slice(n)) said.push(note(m));
 
 	const shown = new Set<number>();
 	const unshown = pending.filter((p) => {
@@ -147,8 +152,8 @@ export function chatForms(
 			: asked.at(-1);
 		if (to && to.decided === null && (a.question || fits(to.form, a.words))) to.decided = a.words;
 	};
-	for (const { text, item } of said) {
-		if (text !== null) answer(text);
+	for (const { text, item, failed } of said) {
+		if (text !== null && !failed) answer(text);
 		if (item?.kind !== 'turn') continue;
 		for (const p of item.parts) {
 			const reply = p.kind === 'text' ? formAtEnd(p.text) : null;

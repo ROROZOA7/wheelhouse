@@ -310,6 +310,17 @@ describe('chatForms', () => {
 			expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
 		});
 
+		it('leaves out a pending copy whose inbox note failed, leaving the form open', () => {
+			const items = [turn('t1', [text('p1', MERGE)], '2026-11-05T09:00:00.000Z')];
+			const forms = chatForms(
+				items,
+				new Set(),
+				[sending(MERGE_ANSWER('Not yet'), 't1')],
+				[note(MERGE_ANSWER('Not yet'), '2026-11-05T09:01:00.000Z', 'failed')]
+			);
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: true });
+		});
+
 		it('still counts a pending copy when only an earlier identical answer shows', () => {
 			const items = [
 				turn('t1', [text('p1', MERGE)]),
