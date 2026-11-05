@@ -174,52 +174,51 @@ describe('chatForms', () => {
 		expect(chatForms(items, new Set(['t1'])).size).toBe(0);
 	});
 
-	it('remembers an inbox answer given from the page whose message never shows', () => {
-		const items = [turn('t1', [text('p1', SHIP)])];
-		const sent = { p1: { text: SHIP_ANSWER('Welcome page only'), words: 'Welcome page only' } };
-		expect(chatForms(items, new Set(), [], sent).get('p1')).toMatchObject({
-			decided: 'Welcome page only',
-			active: false
-		});
-	});
-
-	describe('an answer sent from the page counts once, for its own form', () => {
+	describe('one answer message counts once, for one form', () => {
 		const again = `Still green.\n\n${MERGE}`;
-		const merge = { text: MERGE_ANSWER('Merge'), words: 'Merge' };
 
-		it('answers the earlier form when the same question is asked again before its message shows', () => {
-			// A busy turn: the captain answers p1, the turn asks it again as p2, then the answer lands.
+		it('gives a queued answer to the latest asking when one busy turn asks the same question twice', () => {
 			const items = [turn('t1', [text('p1', MERGE), text('p2', again)])];
 			for (const forms of [
-				chatForms(items, new Set(), [merge.text], { p1: merge }),
-				chatForms([...items, user('u1', merge.text)], new Set(), [], { p1: merge })
-			]) {
-				expect(forms.get('p1')).toMatchObject({ decided: 'Merge', active: false });
-				expect(forms.get('p2')).toMatchObject({ decided: null, active: true });
-			}
-		});
-
-		it('answers the later form and leaves the one it replaced closed', () => {
-			const items = [turn('t1', [text('p1', MERGE)]), turn('t2', [text('p2', again)])];
-			for (const forms of [
-				chatForms(items, new Set(), [merge.text], { p2: merge }),
-				chatForms([...items, user('u1', merge.text)], new Set(), [], { p2: merge })
+				chatForms(items, new Set(), [MERGE_ANSWER('Merge')]),
+				chatForms([...items, user('u1', MERGE_ANSWER('Merge'))], new Set())
 			]) {
 				expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
 				expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
 			}
 		});
 
-		it('still reads a second, identical message the page did not send', () => {
-			const items = [turn('t1', [text('p1', MERGE), text('p2', again)])];
-			const forms = chatForms(
-				[...items, user('u1', merge.text), user('u2', merge.text)],
-				new Set(),
-				[],
-				{ p1: merge }
+		it('answers a later form and leaves the one it replaced closed', () => {
+			const items = [turn('t1', [text('p1', MERGE)]), turn('t2', [text('p2', again)])];
+			for (const forms of [
+				chatForms(items, new Set(), [MERGE_ANSWER('Merge')]),
+				chatForms([...items, user('u1', MERGE_ANSWER('Merge'))], new Set())
+			]) {
+				expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
+				expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
+			}
+		});
+
+		it('never answers a form with the same answer given before it was asked', () => {
+			const items = [
+				turn('t1', [text('p0', MERGE)]),
+				user('u0', MERGE_ANSWER('Merge')),
+				turn('t2', [text('p1', again)])
+			];
+			const forms = chatForms(items, new Set());
+			expect(forms.get('p0')).toMatchObject({ decided: 'Merge', active: false });
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: true });
+			const bare = '```decision-form\n- Merge\n- Not yet\n```';
+			const unnamed = chatForms(
+				[
+					turn('t1', [text('p0', bare)]),
+					user('u0', 'Decided: Merge'),
+					turn('t2', [text('p1', bare)])
+				],
+				new Set()
 			);
-			expect(forms.get('p1')?.decided).toBe('Merge');
-			expect(forms.get('p2')?.decided).toBe('Merge');
+			expect(unnamed.get('p0')?.decided).toBe('Merge');
+			expect(unnamed.get('p1')).toMatchObject({ decided: null, active: true });
 		});
 	});
 });

@@ -74,11 +74,11 @@ class FirstmateChat {
 	}
 
 	/** Try a failed message again. */
-	retry(id: string, token: string, busy: boolean): Promise<ActionResult> | null {
+	retry(id: string, token: string, busy: boolean) {
 		const p = this.outbox.find((m) => m.id === id);
-		if (!p || p.state !== 'failed') return null;
+		if (!p || p.state !== 'failed') return;
 		p.after = lastId(this.chat.items);
-		return this.deliver(p, token, busy);
+		void this.deliver(p, token, busy);
 	}
 
 	dismiss(id: string) {

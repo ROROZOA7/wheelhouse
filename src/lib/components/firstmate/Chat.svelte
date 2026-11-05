@@ -32,7 +32,7 @@
 	} from '$lib/chat/decisions';
 	import { discussText, parseDiscuss, pendingThreads, threads } from '$lib/chat/discuss';
 	import { duration, finishedMcpCalls, type Item } from '$lib/chat/fold';
-	import { answerText, chatForms, type SentAnswer } from '$lib/chat/forms';
+	import { answerText, chatForms } from '$lib/chat/forms';
 	import type { Health } from '$lib/chat/health';
 	import { markdown } from '$lib/chat/markdown';
 	import { pendingLabel } from '$lib/chat/outbox';
@@ -218,40 +218,23 @@
 	const projectName = (id: string | null) =>
 		!id || id === 'unassigned' ? null : (projects.find((p) => p.id === id)?.name ?? id);
 
-	// Forms Firstmate asked in the conversation; what was decided from this page, by reply part.
-	let decidedHere = $state<Record<string, SentAnswer>>({});
+	// Forms Firstmate asked in the conversation, answered from the transcript and messages being sent.
 	const forms = $derived(
 		chatForms(
 			items,
 			discussed.hidden,
-			firstmateChat.pending.map((p) => p.text),
-			decidedHere
+			firstmateChat.pending.map((p) => p.text)
 		)
 	);
 	/** A reply's words as its bubble shows them: without the form it ends with. */
 	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
 
-	// Answers sent from this page, by reply part, delivered or not.
-	const answers: Record<string, SentAnswer> = {};
-	const delivered = (partId: string) => {
-		decidedHere = { ...decidedHere, [partId]: answers[partId] };
-	};
-
-	async function decide(partId: string, a: FormAnswer, note: string | null) {
+	function decide(partId: string, a: FormAnswer, note: string | null) {
 		const asked = forms.get(partId);
 		const text = asked ? answerText(asked.form, a, note) : '';
 		// Never typed into an open menu, where Enter would choose for the captain.
 		if (!text || !via || held) return;
-		answers[partId] = { text, words: a.decided ?? '' };
-		const r = await firstmateChat.send(text, via, token, working && !waitingOnAnswer);
-		if (r.ok) delivered(partId);
-	}
-
-	async function retry(id: string) {
-		const text = firstmateChat.pending.find((p) => p.id === id)?.text;
-		const r = await firstmateChat.retry(id, token, working && !waitingOnAnswer);
-		const partId = Object.keys(answers).find((k) => answers[k].text === text && !decidedHere[k]);
-		if (partId && r?.ok) delivered(partId);
+		void firstmateChat.send(text, via, token, working && !waitingOnAnswer);
 	}
 
 	function ask(d: Decision, text: string) {
@@ -580,7 +563,7 @@
 					holding = true;
 				}}
 				onAsk={(text) => ask(d, text)}
-				onRetry={(id) => void retry(id)}
+				onRetry={(id) => firstmateChat.retry(id, token, working && !waitingOnAnswer)}
 				onDismiss={(id) => firstmateChat.dismiss(id)}
 			/>
 		</div>
@@ -920,7 +903,7 @@
 													name={part.id}
 													canAnswer={asked.active && !!via && !held}
 													decided={asked.decided}
-													onAnswer={(a, note) => void decide(part.id, a, note)}
+													onAnswer={(a, note) => decide(part.id, a, note)}
 												/>
 												{#if !asked.active && asked.decided === null}
 													<p class="mt-2 text-xs text-muted-foreground">
@@ -1012,7 +995,7 @@
 									<CircleX class="size-3.5" aria-hidden="true" />{pendingLabel(p)}
 									<button
 										class="ml-1 inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-muted"
-										onclick={() => void retry(p.id)}
+										onclick={() => firstmateChat.retry(p.id, token, working && !waitingOnAnswer)}
 										><RotateCw class="size-3" aria-hidden="true" />Retry</button
 									>
 									<button
