@@ -208,7 +208,7 @@ describe('decision forms in the conversation', () => {
 		)!;
 		merge.click();
 		flushSync();
-		await vi.waitFor(() => expect(sentText()).toBe('Decided: Merge'));
+		await vi.waitFor(() => expect(sentText()).toBe('Decided: Merge — for: “Merge it now?”'));
 		const [form] = forms();
 		expect(form.dataset.chatForm).toBe('answered');
 		expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Merge');
@@ -216,7 +216,10 @@ describe('decision forms in the conversation', () => {
 	});
 
 	it('reads what was decided back from the transcript', () => {
-		show(firstmate('a1', '11', MERGE), captain('u2', '12', 'Decided: Not yet'));
+		show(
+			firstmate('a1', '11', MERGE),
+			captain('u2', '12', 'Decided: Not yet — for: “Merge it now?”')
+		);
 		const [form] = forms();
 		expect(form.dataset.chatForm).toBe('answered');
 		expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Not yet');
@@ -232,11 +235,48 @@ describe('decision forms in the conversation', () => {
 		forms()[0]
 			.querySelector('form')!
 			.dispatchEvent(new Event('submit', { cancelable: true }));
-		await vi.waitFor(() => expect(sentText()).toBe('Decided: The last two years'));
+		await vi.waitFor(() =>
+			expect(sentText()).toBe('Decided: The last two years — for: “Which browsers?”')
+		);
 	});
 
-	it('answers only the latest open form; one a later form replaced cannot be pressed', () => {
+	it('keeps an earlier form answerable on its own once a later one is asked', async () => {
 		show(firstmate('a1', '11', ASK), firstmate('a2', '12', MERGE));
+		const [earlier, latest] = forms();
+		expect(earlier.dataset.chatForm).toBe('open');
+		expect(latest.dataset.chatForm).toBe('open');
+		const only = [...earlier.querySelectorAll<HTMLInputElement>('input[type="radio"]')][1];
+		only.click();
+		flushSync();
+		const decide = [...earlier.querySelectorAll('button')].find((b) =>
+			b.textContent!.trim().startsWith('Decide')
+		)!;
+		decide.click();
+		flushSync();
+		await vi.waitFor(() =>
+			expect(sentText()).toBe('Decided: Welcome page only — for: “Which should ship?”')
+		);
+		await vi.waitFor(() => expect(forms()[0].dataset.chatForm).toBe('answered'));
+		expect(forms()[1].dataset.chatForm).toBe('open');
+	});
+
+	it('leaves a later form in the same turn open when a queued answer to an earlier one lands', () => {
+		show(
+			firstmate('a1', '11', ASK),
+			firstmate('a2', '11', MERGE),
+			captain('u2', '12', 'Decided: Welcome page only — for: “Which should ship?”')
+		);
+		const [earlier, latest] = forms();
+		expect(earlier.dataset.chatForm).toBe('answered');
+		expect(earlier.querySelector('[data-decided]')!.textContent).toContain(
+			'You decided Welcome page only'
+		);
+		expect(latest.dataset.chatForm).toBe('open');
+		expect([...latest.querySelectorAll('button')].some((b) => !b.disabled)).toBe(true);
+	});
+
+	it('closes a form a later one with the same question replaced', () => {
+		show(firstmate('a1', '11', MERGE), firstmate('a2', '12', `Still green.\n\n${MERGE}`));
 		const [replaced, latest] = forms();
 		expect(replaced.dataset.chatForm).toBe('replaced');
 		expect(replaced.textContent).toContain('A later question from Firstmate replaced this one.');
@@ -246,7 +286,35 @@ describe('decision forms in the conversation', () => {
 			)
 		).toBe(true);
 		expect(latest.dataset.chatForm).toBe('open');
-		expect([...latest.querySelectorAll('button')].some((b) => !b.disabled)).toBe(true);
+	});
+
+	it('opens the form again when an answer that failed to send is dismissed', async () => {
+		fetchMock.mockImplementation(async () => new Response('{"error":"down"}', { status: 500 }));
+		show(firstmate('a1', '11', MERGE));
+		[...forms()[0].querySelectorAll('button')]
+			.find((b) => b.textContent!.startsWith('Merge'))!
+			.click();
+		flushSync();
+		await vi.waitFor(() => expect(firstmateChat.pending[0]?.state).toBe('failed'));
+		flushSync();
+		firstmateChat.dismiss(firstmateChat.pending[0].id);
+		flushSync();
+		expect(forms()[0].dataset.chatForm).toBe('open');
+	});
+
+	it('keeps an example block earlier in the reply in its words', () => {
+		show(
+			firstmate(
+				'a1',
+				'11',
+				`Like this:\n\n\`\`\`decision-form\nReady?\n- Yes\n- No\n\`\`\`\n\n${MERGE}`
+			)
+		);
+		const bubble = bubbles().find((b) => b.dataset.bubble === 'a1-t')!;
+		expect(bubble.textContent).toContain('Ready?');
+		expect(bubble.textContent).toContain('Checks are green.');
+		expect(forms()).toHaveLength(1);
+		expect(forms()[0].textContent).toContain('Merge it now?');
 	});
 
 	it('cannot be answered while a Claude Code menu is open in the session', () => {

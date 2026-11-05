@@ -46,7 +46,7 @@
 	import { openedDecisions } from '$lib/client/opened.svelte';
 	import { composerBus } from './bus.svelte';
 	import { currentHealth, currentMessages } from '$lib/client/live.svelte';
-	import { withoutForm, type FormAnswer } from '$lib/decisionform';
+	import type { FormAnswer } from '$lib/decisionform';
 	import { ago } from '$lib/format';
 	import type { InboxView } from '$lib/inbox';
 	import type { Project, TaskSummary } from '$lib/types';
@@ -229,15 +229,15 @@
 		)
 	);
 	/** A reply's words as its bubble shows them: without the form it ends with. */
-	const replyWords = (part: { id: string; text: string }) =>
-		forms.has(part.id) ? withoutForm(part.text) : part.text;
+	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
 
-	function decide(partId: string, a: FormAnswer, note: string | null) {
-		const text = answerText(a, note);
+	async function decide(partId: string, a: FormAnswer, note: string | null) {
+		const asked = forms.get(partId);
+		const text = asked ? answerText(asked.form, a, note) : '';
 		// Never typed into an open menu, where Enter would choose for the captain.
 		if (!text || !via || held) return;
-		decidedHere = { ...decidedHere, [partId]: a.decided ?? '' };
-		void firstmateChat.send(text, via, token, working && !waitingOnAnswer);
+		const r = await firstmateChat.send(text, via, token, working && !waitingOnAnswer);
+		if (r.ok) decidedHere = { ...decidedHere, [partId]: a.decided ?? '' };
 	}
 
 	function ask(d: Decision, text: string) {
@@ -906,7 +906,7 @@
 													name={part.id}
 													canAnswer={asked.active && !!via && !held}
 													decided={asked.decided}
-													onAnswer={(a, note) => decide(part.id, a, note)}
+													onAnswer={(a, note) => void decide(part.id, a, note)}
 												/>
 												{#if !asked.active && asked.decided === null}
 													<p class="mt-2 text-xs text-muted-foreground">
