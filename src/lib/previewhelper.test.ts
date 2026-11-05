@@ -4,6 +4,7 @@ import {
 	helperPrompt,
 	pageText,
 	parseBatch,
+	pluginBatchText,
 	readReply,
 	readRequest,
 	type HelperContext
@@ -148,11 +149,64 @@ describe('batchText and parseBatch', () => {
 			taskId: 'lumen-share',
 			title: 'Shareable album links',
 			url: 'http://127.0.0.1:5240/',
+			plugin: null,
 			items: [
 				{ text: 'Make links last 30 days', points: 'the “In 7 days” menu' },
 				{ text: 'Turn downloads off by default', points: null }
 			]
 		});
 		expect(parseBatch('Preview looks good')).toBeNull();
+	});
+
+	it('sends a plugin’s list in the same shape, attributed to the plugin, and reads it back', () => {
+		const text = pluginBatchText(
+			{ id: 'lumen-plan', title: 'Plan the  share links' },
+			{ id: 'plan-review', name: 'Plan review' },
+			'data/lumen-plan/plan.md@abc1234: Request changes',
+			[
+				{
+					text: 'Use a migration,\n not a raw table',
+					points: '“1. Add the widget table.” (line 5)'
+				},
+				{ text: 'Say who owns the rollout', points: null }
+			]
+		);
+		expect(text).toBe(
+			[
+				'Feedback for lumen-plan (Plan the share links), sent together from the “Plan review” plugin (plan-review), about data/lumen-plan/plan.md@abc1234: Request changes:',
+				'1. Use a migration, not a raw table',
+				'   Points at: “1. Add the widget table.” (line 5)',
+				'2. Say who owns the rollout',
+				'',
+				'Firstmate: pass these to this task’s worker, the same task (start no new one). You may add notes of your own, marked as yours.'
+			].join('\n')
+		);
+		expect(parseBatch(text)).toEqual({
+			taskId: 'lumen-plan',
+			title: 'Plan the share links',
+			url: null,
+			plugin: {
+				id: 'plan-review',
+				name: 'Plan review',
+				subject: 'data/lumen-plan/plan.md@abc1234: Request changes'
+			},
+			items: [
+				{ text: 'Use a migration, not a raw table', points: '“1. Add the widget table.” (line 5)' },
+				{ text: 'Say who owns the rollout', points: null }
+			]
+		});
+	});
+
+	it('leaves out an empty subject, and keeps quotes out of the plugin’s name', () => {
+		const text = pluginBatchText(
+			{ id: 't', title: 'T' },
+			{ id: 'acme', name: '“Acme” review' },
+			'  ',
+			[{ text: 'One' }]
+		);
+		expect(text.split('\n')[0]).toBe(
+			'Feedback for t (T), sent together from the “Acme review” plugin (acme):'
+		);
+		expect(parseBatch(text)?.plugin).toEqual({ id: 'acme', name: 'Acme review', subject: null });
 	});
 });

@@ -477,6 +477,45 @@ describe('preview feedback in the chat', () => {
 		expect(order).toEqual(['Morning.', 'Morning, Captain.', 'batch', 'Thanks.', 'Understood.']);
 		live.messages = null;
 	});
+
+	it('shows a plugin’s feedback list as the captain’s card too, naming the plugin and what it is about', async () => {
+		const { live } = await import('$lib/client/live.svelte');
+		const { pluginBatchText } = await import('$lib/previewhelper');
+		live.messages = {
+			schema: 'wheelhouse-messages.v1',
+			available: true,
+			reason: null,
+			receiptsAt: null,
+			receiptsError: null,
+			messages: [
+				{
+					requestId: 'wh-plan',
+					text: pluginBatchText(
+						{ id: 'lumen-plan', title: 'Plan share links' },
+						{ id: 'plan-review', name: 'Plan review' },
+						'plan.md: Request changes',
+						[{ text: 'Add a rollback step', points: '“Ship it” (line 12)' }]
+					),
+					taskId: 'lumen-plan',
+					submittedAt: at('10'),
+					delivery: 'delivered',
+					deliveryDetail: null,
+					acknowledged: null,
+					noteId: 'n1',
+					reply: null
+				}
+			]
+		} as never;
+		state.page.data = { inbox: view([]), sessionToken: 't' };
+		start(BASE);
+		const card = document.querySelector<HTMLElement>('[data-feedback-batch]')!;
+		expect(card.getAttribute('aria-label')).toMatch(/^Your Plan review feedback, /);
+		expect(card.textContent).toContain('To Firstmate · Plan review feedback');
+		expect(card.textContent).toContain('About plan.md: Request changes');
+		expect(card.textContent).toContain('Points at “Ship it” (line 12)');
+		expect(card.querySelector('a')!.getAttribute('href')).toBe('/tasks/lumen-plan');
+		live.messages = null;
+	});
 });
 
 describe('live previews in the chat', () => {

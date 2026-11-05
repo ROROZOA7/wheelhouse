@@ -83,6 +83,10 @@
 				<dt class="text-muted-foreground">Addresses</dt>
 				<dd>{p.addresses.join('; ')}</dd>
 			{/if}
+			{#if p.capabilities?.length}
+				<dt class="text-muted-foreground">Sends</dt>
+				<dd>{p.capabilities.join('; ')}</dd>
+			{/if}
 			<dt class="text-muted-foreground">On</dt>
 			<dd>{p.on}</dd>
 		</dl>

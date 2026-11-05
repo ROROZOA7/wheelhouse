@@ -29,6 +29,7 @@ const plugin: PluginStatus = {
 	slots: ['home.card', 'project.tab'],
 	hostRoutes: [],
 	addressRewrites: [],
+	capabilities: [],
 	enabledByDefault: false,
 	enabledWhenFile: null,
 	enabledWhenHomeFile: null,

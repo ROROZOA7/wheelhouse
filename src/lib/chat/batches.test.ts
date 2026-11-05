@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { batchText } from '../previewhelper';
+import { batchText, pluginBatchText } from '../previewhelper';
 import type { BridgeMessage } from '../types';
 import { chatBatches, placeBatches } from './batches';
 import type { Item } from './fold';
@@ -34,6 +34,18 @@ describe('chatBatches', () => {
 			['r4', 'Not delivered', true, null]
 		]);
 		expect(out[0].batch.items).toEqual([{ text: 'Make links last 30 days', points: null }]);
+	});
+
+	it('keeps a plugin’s feedback list too, with the plugin that sent it', () => {
+		const text = pluginBatchText(
+			{ id: 'lumen-plan', title: 'Plan' },
+			{ id: 'plan-review', name: 'Plan review' },
+			'plan.md',
+			[{ text: 'Add a rollback step', points: 'line 12' }]
+		);
+		const [b] = chatBatches([msg({ text, taskId: 'lumen-plan' })]);
+		expect(b.batch.plugin).toEqual({ id: 'plan-review', name: 'Plan review', subject: 'plan.md' });
+		expect(b.batch.items).toEqual([{ text: 'Add a rollback step', points: 'line 12' }]);
 	});
 });
 

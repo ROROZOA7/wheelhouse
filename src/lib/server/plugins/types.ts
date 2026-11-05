@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Render, Scope, ServiceSpec, Slot } from '../../plugins/types';
+import type { Capability, Render, Scope, ServiceSpec, Slot } from '../../plugins/types';
 import type { Available, Project, TaskSummary } from '../../types';
 
 /**
@@ -8,8 +8,10 @@ import type { Available, Project, TaskSummary } from '../../types';
  * compiled into Wheelhouse or installed (see `manifest.ts` and `loader.ts`): a manifest, providers that read data on the
  * server, and contributions that put a provider's output in a fixed UI slot.
  * Providers read only through ProviderContext; there is no way to write,
- * message Firstmate or control workers. The one exception is a host route,
- * which answers requests for a `*.localhost` name the plugin declares.
+ * message Firstmate or control workers. The exceptions: a host route, which
+ * answers requests for a `*.localhost` name the plugin declares, and the
+ * `feedback` capability, which lets the plugin's elements send Firstmate a
+ * feedback list on the captain's click.
  */
 
 /** The plugin contract version this file describes. */
@@ -60,6 +62,12 @@ export interface WheelhousePlugin {
 	addressRewrites?: AddressRewrite[];
 	/** `*.localhost` names whose requests, while the plugin is on, go to its own code. */
 	hostRoutes?: HostRoute[];
+	/**
+	 * What it may do beyond reading. `feedback`: its elements may send
+	 * Firstmate a feedback list about one task, on the captain's click
+	 * (server/plugins/feedback.ts). An installed plugin's are its manifest's.
+	 */
+	capabilities?: Capability[];
 }
 
 /** Show addresses on Wheelhouse's computer at `to`, a host template such as `{port}.localhost`. */

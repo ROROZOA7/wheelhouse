@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { postFeedback } from '$lib/client/feedback';
 	import { launchAndOpen, serviceStatus } from '$lib/client/services';
 	import {
 		mountElement,
@@ -14,7 +15,8 @@
 	 * An installed plugin's custom element, mounted in the browser only. A bundle
 	 * that fails to load, or never defines the tag, says why (or, `quiet`, shows
 	 * nothing); a new provider value is handed to the same element. The element
-	 * gets `host`, which starts its own plugin's companion services with the
+	 * gets `host`, which starts its own plugin's companion services and, with
+	 * the `feedback` capability, sends Firstmate a feedback list, with the
 	 * page's session token, so the element need not handle it.
 	 */
 	let {
@@ -47,6 +49,7 @@
 				{
 					status: serviceStatus,
 					launch: launchAndOpen,
+					feedback: postFeedback,
 					token: () => (page.data.sessionToken as string) ?? ''
 				}
 			),

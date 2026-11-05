@@ -13,7 +13,7 @@ Plugins are "panels and providers". A provider reads data on the server; a contr
 | `header.indicator` | the fleet | a small pill in the header on every page, drawn by the plugin's own panel or element only; it shows nothing when it renders nothing  |
 | `nav.page`         | the fleet | its own page at `/plugins/<plugin>/<page>`, a top-level item in the left-hand menu after Logbook                                     |
 
-**Isolation.** Each provider call runs with a timeout (3 s by default, at most 10 s) and its result is cached for the provider's `ttlMs` (a failure for at most 15 s); after that, the last good result is served, for up to 10 minutes, while one refresh runs. A provider that throws, times out or returns something malformed becomes "Not available" with the reason, in its own entry only; the rest of the page and every other plugin render as usual. A plugin's own panel mounts in the browser inside an error boundary, so a panel that throws is contained too; an installed plugin whose element's bundle fails to load says so in its own place. An installed plugin that cannot be read, is invalid or throws while it loads is listed as failed, with the reason, and the rest load as usual. Providers see copies of the fleet and read only through their context: `readFile` and `listDir` confined to the project clone, the task worktree or the Firstmate home (at most 64 KiB), `exec` in one of those with an argument array, no shell, a minimal environment and bounded time and output (at most 8 MiB), `changedFiles` for the files a task in scope changed against its base branch, `loopbackAddresses` for the addresses on this computer Wheelhouse has shown, and `reservedPorts` for Wheelhouse's own ports (see [Host routes and address rewrites](#host-routes-and-address-rewrites)). There is no way to write, message Firstmate or control workers (an MCP app can only ask to send Firstmate a message, which the captain reads and agrees to first; see [MCP apps](#mcp-apps)); the one thing Wheelhouse starts for a plugin is its declared companion service, on the captain's click (see [Companion services](#companion-services)), and the one place a plugin serves anything is a host route it declares. Commands run with your permissions: read-only is the plugin's contract, reviewed in Wheelhouse's own pull requests, not a sandbox.
+**Isolation.** Each provider call runs with a timeout (3 s by default, at most 10 s) and its result is cached for the provider's `ttlMs` (a failure for at most 15 s); after that, the last good result is served, for up to 10 minutes, while one refresh runs. A provider that throws, times out or returns something malformed becomes "Not available" with the reason, in its own entry only; the rest of the page and every other plugin render as usual. A plugin's own panel mounts in the browser inside an error boundary, so a panel that throws is contained too; an installed plugin whose element's bundle fails to load says so in its own place. An installed plugin that cannot be read, is invalid or throws while it loads is listed as failed, with the reason, and the rest load as usual. Providers see copies of the fleet and read only through their context: `readFile` and `listDir` confined to the project clone, the task worktree or the Firstmate home (at most 64 KiB), `exec` in one of those with an argument array, no shell, a minimal environment and bounded time and output (at most 8 MiB), `changedFiles` for the files a task in scope changed against its base branch, `loopbackAddresses` for the addresses on this computer Wheelhouse has shown, and `reservedPorts` for Wheelhouse's own ports (see [Host routes and address rewrites](#host-routes-and-address-rewrites)). There is no way to write, message Firstmate or control workers (an MCP app can only ask to send Firstmate a message, which the captain reads and agrees to first, see [MCP apps](#mcp-apps); and a plugin whose manifest asks for the `feedback` capability can have its element send Firstmate a feedback list about a task, on the captain's click, see [Sending feedback to Firstmate](#sending-feedback-to-firstmate)); the one thing Wheelhouse starts for a plugin is its declared companion service, on the captain's click (see [Companion services](#companion-services)), and the one place a plugin serves anything is a host route it declares. Commands run with your permissions: read-only is the plugin's contract, reviewed in Wheelhouse's own pull requests, not a sandbox.
 
 **Versions.** Every plugin declares the plugin contract it was written against (`apiVersion`, in an installed plugin's manifest `wheelhouse.apiVersion`). Wheelhouse loads the current contract (1) and, once there is a 2, the one before it; it refuses any other, with the reason in `/api/plugins`, and never downgrades silently. Blocks are versioned schemas (`text.v1`, `kv.v1`, `table.v1`, `links.v1`, `image.v1`, `status.v1`, `graph.v1`, the last a nodes-and-links placeholder until a chart renderer lands). A block Wheelhouse does not know renders as a plain fallback, plugin text is always text, and links and images keep only http(s) URLs and same-origin paths.
 
@@ -58,7 +58,7 @@ Its page in **Settings → Plugins** sets the plugin-wide watch rule and mode: *
 | `bell`           | rings the ship's bell once (**New issue**), with **Hand to Firstmate**, **Open issue** and **Watched issues**                                                                                |
 | `auto`           | hands it to Firstmate once, unless it is already in hand: a note through `fm-inbox.sh note`, like any message, with the issue's URL, repository and title and a request id made from its URL |
 
-Plugins cannot write, ring the bell or message Firstmate, and this one is no exception: `bell` and `auto` are Wheelhouse's own issue watcher (`src/lib/server/issues/`), which reads this plugin's `watch` provider once a minute (only the built-in plugin with this id; an installed plugin is never read this way), takes the mode from `plugins.json` itself, and builds every alert and note from the issue's URL, repository, number and title. Issues that already match when a project's `bell` or `auto` watch starts (its first good read, or after its mode, labels or assignee change) are its baseline, not news; a read the plugin made under labels or an assignee other than `plugins.json` now gives decides nothing, and the watcher waits for one made under the new rule. The issues each project has seen are kept in Wheelhouse's state directory (`issue-watch.json`, beside the message store), so a restart rings and sends nothing twice and issues that arrived meanwhile are still news; one that leaves the rule and comes back is not news again, and setting a project back to `list` forgets its record. A handoff waits, and is tried again a minute later, while Firstmate's records cannot be read (so nothing is known to be in hand), messaging is off, or Firstmate refused it; it is never sent a second time once Firstmate has it.
+Plugins cannot write or ring the bell, and message Firstmate only through the [feedback capability](#sending-feedback-to-firstmate), which this one does not ask for: `bell` and `auto` are Wheelhouse's own issue watcher (`src/lib/server/issues/`), which reads this plugin's `watch` provider once a minute (only the built-in plugin with this id; an installed plugin is never read this way), takes the mode from `plugins.json` itself, and builds every alert and note from the issue's URL, repository, number and title. Issues that already match when a project's `bell` or `auto` watch starts (its first good read, or after its mode, labels or assignee change) are its baseline, not news; a read the plugin made under labels or an assignee other than `plugins.json` now gives decides nothing, and the watcher waits for one made under the new rule. The issues each project has seen are kept in Wheelhouse's state directory (`issue-watch.json`, beside the message store), so a restart rings and sends nothing twice and issues that arrived meanwhile are still news; one that leaves the rule and comes back is not news again, and setting a project back to `list` forgets its record. A handoff waits, and is tried again a minute later, while Firstmate's records cannot be read (so nothing is known to be in hand), messaging is off, or Firstmate refused it; it is never sent a second time once Firstmate has it.
 
 ## Vault
 
@@ -265,6 +265,7 @@ An installed plugin lives in a repository of its own, laid out like a Claude Cod
 - The enable rule is the manifest's own: `enabledByDefault`, `enabledWhenFile` or `enabledWhenHomeFile`, as in [Turning plugins on and off](#turning-plugins-on-and-off).
 - `wheelhouse.contributions` lists every contribution's id and slot, `wheelhouse.services` every companion service's id and scope (`fleet` or `project`), `wheelhouse.mcpServers` every MCP server's id and the service it runs on (see [MCP apps](#mcp-apps)), and `wheelhouse.hostRoutes` every host route's id and host template (see [Host routes and address rewrites](#host-routes-and-address-rewrites)). These are what `wheelhouse plugin install` shows before you agree, so the server entry must contribute exactly these: Wheelhouse refuses a plugin whose code adds, drops or moves one, and a route's host is always the manifest's.
 - `wheelhouse.addressRewrites` (optional) lists the host templates it shows addresses on this computer at, each `{ "id": "localhost", "to": "{port}.localhost" }`; they are the manifest's alone.
+- `wheelhouse.capabilities` (optional) lists what the plugin may do beyond reading. The one there is, `feedback`, lets its elements send Firstmate a feedback list about a task (see [Sending feedback to Firstmate](#sending-feedback-to-firstmate)). They are the manifest's alone: a server entry that exports its own is ignored.
 - `wheelhouse.settings` (optional) declares what the plugin needs to know, by key (a letter, then letters, digits and underscores; at most 20): each with a `title` for the question (else the key), a `description`, a `type` (`text`, the default, `number`, `boolean` or `list`, a list of short texts), whether it is `required`, a `default` of that type (for a `list`, a list of texts), and for a `text` setting optionally `options`, the values it may take, each `{ "value": "bell", "label": "Ring the ship’s bell" }` (the label is what pages show; the `default` must be one of the values). See [Settings](#settings).
 
 Any other field is refused. The SDK's [`plugin.schema.json`](../packages/plugin-sdk/plugin.schema.json) is the same rules as a JSON Schema, for editors.
@@ -296,7 +297,7 @@ The bundle runs in Wheelhouse's pages with the page's own permissions, as Wheelh
 
 ### The host API
 
-`host` is what the page lets an element do: read and start its own plugin's companion services, the same as a compiled-in page's **Launch**. It names no plugin: the plugin is the element's own, fixed when the element is made, so an element cannot reach another plugin's services, and the page supplies the session token that starting a service needs, so the element does not handle it. This is a convenience, not a boundary: the element runs with the page's own permissions and could read the token itself.
+`host` is what the page lets an element do: read and start its own plugin's companion services, the same as a compiled-in page's **Launch**, and, for a plugin with the `feedback` capability, send Firstmate a feedback list. It names no plugin: the plugin is the element's own, fixed when the element is made, so an element cannot reach another plugin's services, and the page supplies the session token that starting a service needs, so the element does not handle it. This is a convenience, not a boundary: the element runs with the page's own permissions and could read the token itself.
 
 ```js
 // in the element, e.g. a Launch button's click handler
@@ -308,7 +309,58 @@ if (view?.launchable) await this.host.launch('ui', { open: `${view.url}/proposal
 - `host.service(service, { project? })` answers whether the service is up, as `GET /api/services` does: a `ServiceView` (`state` is `running`, `stopped`, `starting`, `failed`, `occupied` or `unavailable`, with `url`, `reason`, `launchable` and `hint`, the command to start it by hand), or null when the plugin declares no such service there.
 - `host.launch(service, { project?, open? })` starts it, as **Launch** does, and once it answers opens `open` (or the service's own address) in a new tab; it resolves to the service's view after the start. Call it from a click handler only, so the new tab is allowed and the start is the captain's.
 
+- `host.sendFeedback({ task?, subject?, items })` sends Firstmate one feedback list about a task, attributed to the plugin; see [Sending feedback to Firstmate](#sending-feedback-to-firstmate).
+
 `project` defaults to the entry's project (null in a fleet slot); a project-scoped service needs one and a fleet one none. There is no stop: a service Wheelhouse started keeps running after it stops, as one started from a compiled-in page does. The SDK types it as `PluginHost`.
+
+### Sending feedback to Firstmate
+
+A plugin can let the captain send Firstmate a list of changes about one task, the way a list goes from a task's Preview tab: a plan review that collects notes on a worker's plan, say. It asks for the `feedback` capability in its manifest, so `wheelhouse plugin install`, the Plugins page's review and the plugin's page say it **Sends Firstmate feedback lists about a task, each when you click to send it** before anything is installed:
+
+```json
+"wheelhouse": {
+	"apiVersion": 1,
+	"server": "wheelhouse/server/index.js",
+	"ui": "wheelhouse/ui/index.js",
+	"contributions": [{ "id": "plan", "slot": "task.section" }],
+	"capabilities": ["feedback"]
+}
+```
+
+Its element then sends the list with `host.sendFeedback`, from the click handler of its own send button:
+
+```js
+// in the element: the captain's notes, and a Send to Firstmate button
+send.addEventListener('click', async () => {
+	const r = await this.host.sendFeedback({
+		// task: 'lumen-plan', // the entry's own task in a task slot; name one elsewhere
+		subject: 'data/lumen-plan/plan.md: Request changes',
+		items: [
+			{ text: 'Use a migration, not a raw table', points: '“1. Add the widget table.” (line 5)' },
+			{ text: 'Say who owns the rollout' }
+		]
+	});
+	status.textContent = r.ok ? 'Sent to Firstmate.' : r.error;
+});
+```
+
+- `items` are one change per line (at most 30, each at most 500 characters), each with an optional `points`, what it is about in a few words (at most 200), such as a quote and its line; `subject` (optional, at most 200) says what the whole list is about. Whitespace is folded and empty lines are dropped.
+- `task` is the task the list is about: the entry's own task (`entry.taskId`) in a `task.section` or `step.evidence`, else one the element names. Wheelhouse refuses a task it does not know and one the plugin is off for.
+- The send is the captain's: `sendFeedback` is refused unless it is called while the page still counts the captain's click or key press as just made (the browser's transient activation), so call it in the click handler, before anything else awaits. Nothing is sent by itself, and there is no extra confirmation: the button is the send.
+- It resolves to `{ ok: true, pending }` once Firstmate's inbox has the list (`pending` while Wheelhouse is still confirming it), or `{ ok: false, error }` with the reason, such as a plugin that does not ask for the capability.
+
+Wheelhouse, not the plugin, writes the message (`POST /api/plugins/<id>/feedback`): the preview list's shape, attributed to the plugin by the name in its manifest, about the task by its id and title, and with the same closing line asking Firstmate to pass it to that task's worker:
+
+```
+Feedback for lumen-plan (Plan the share links), sent together from the “Plan review” plugin (plan-review), about data/lumen-plan/plan.md: Request changes:
+1. Use a migration, not a raw table
+   Points at: “1. Add the widget table.” (line 5)
+2. Say who owns the rollout
+
+Firstmate: pass these to this task’s worker, the same task (start no new one). You may add notes of your own, marked as yours.
+```
+
+It goes to Firstmate's inbox as one note about the task (`Re: <task-id>`), the way every Wheelhouse message goes, so Firstmate passes it to that task's worker, or starts a new run when the worker is gone. The chat shows it as the captain's card addressed to Firstmate, naming the plugin and what the list is about, with whether Firstmate has it and its reply, and it counts as a change asked on the task (**Plugin feedback**). As with the rest of the host API, this is a convenience, not a boundary: the element runs with the page's permissions.
 
 ### Installing and managing plugins
 
@@ -321,7 +373,7 @@ wheelhouse plugin enable project-links
 wheelhouse plugin remove project-links
 ```
 
-`install` fetches the repository from GitHub with `git` at the ref given (a shallow fetch; a commit GitHub will not fetch shallowly is fetched in full), records the exact commit, drops the git metadata, checks the manifest and that its entries exist, then shows it: name, version, where it came from, the commit, author, contract, slots, services, MCP apps, UI bundle and when it is on, and that its code runs with your permissions. Nothing is kept until you agree; `--yes` agrees without asking, for scripts, and without a terminal to ask on it refuses unless given `--yes`. Once you agree, it asks for the settings the plugin declares (see [Settings](#settings)). Installing never runs the plugin's code. `update` shows the same, with the old and new version and commit, asks again, and asks for any setting the new version adds. Nothing updates by itself.
+`install` fetches the repository from GitHub with `git` at the ref given (a shallow fetch; a commit GitHub will not fetch shallowly is fetched in full), records the exact commit, drops the git metadata, checks the manifest and that its entries exist, then shows it: name, version, where it came from, the commit, author, contract, slots, services, MCP apps, what it sends to Firstmate, UI bundle and when it is on, and that its code runs with your permissions. Nothing is kept until you agree; `--yes` agrees without asking, for scripts, and without a terminal to ask on it refuses unless given `--yes`. Once you agree, it asks for the settings the plugin declares (see [Settings](#settings)). Installing never runs the plugin's code. `update` shows the same, with the old and new version and commit, asks again, and asks for any setting the new version adds. Nothing updates by itself.
 
 **Restarting to load a change.** Wheelhouse loads plugins once, when it starts, so `install`, `update`, `remove`, `enable` and `disable` each restart every Wheelhouse running from the same plugins directory once they have made their change, and say so (`Restarting Wheelhouse at http://127.0.0.1:4310/ to load project-links.`); with none running, they say the change loads at the next start. `wheelhouse open` runs the server under a small supervisor that starts it again with the same options on the port it first listened on (so `--port 0` keeps its address), without opening another browser tab; pages reconnect by themselves, and Firstmate's session and its crew keep running, since they belong to tmux, not to Wheelhouse.
 

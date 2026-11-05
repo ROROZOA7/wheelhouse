@@ -245,6 +245,8 @@ export interface SlotEntry {
 	contributionId: string;
 	title: string;
 	projectId: string | null;
+	/** The task a task slot's entry is about. */
+	taskId?: string | null;
 }
 
 /** A companion service as the page sees it (`GET /api/services`). */
@@ -285,7 +287,27 @@ export interface PluginHost {
 		service: string,
 		o?: { project?: string | null; open?: string | null }
 	): Promise<ServiceView | null>;
+	/**
+	 * Send Firstmate one feedback list about a task, as a list from the Preview
+	 * tab goes, attributed to this plugin. Needs `"capabilities": ["feedback"]`
+	 * in the manifest, and must be called from the captain's click (before
+	 * anything else awaits); otherwise it is refused, with the reason.
+	 */
+	sendFeedback(list: FeedbackList): Promise<FeedbackResult>;
 }
+
+/** A feedback list for `host.sendFeedback`. */
+export interface FeedbackList {
+	/** The task it is about; the entry's own task (in a task slot) when left out. */
+	task?: string | null;
+	/** What the list is about, in a few words (e.g. "data/x/plan.md: Request changes"). */
+	subject?: string | null;
+	/** One change per line (at most 30, 500 characters each), with what it points at (200). */
+	items: { text: string; points?: string | null }[];
+}
+
+/** Whether Firstmate's inbox took the list (`pending`: still being confirmed), or why not. */
+export type FeedbackResult = { ok: true; pending: boolean } | { ok: false; error: string };
 
 /**
  * A plugin's custom element: Wheelhouse sets `host` (before the others),

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { validHostTemplate } from '../../plugins/addresses';
-import { SLOTS, type Slot } from '../../plugins/types';
+import { CAPABILITIES, SLOTS, type Capability, type Slot } from '../../plugins/types';
 import { SUPPORTED_API_VERSIONS, type WheelhousePlugin } from './types';
 
 /**
@@ -26,14 +26,15 @@ import { SUPPORTED_API_VERSIONS, type WheelhousePlugin } from './types';
  *       },
  *       "mcpServers": [],
  *       "addressRewrites": [{ "id": "localhost", "to": "{port}.localhost" }],
- *       "hostRoutes": [{ "id": "proxy", "host": "{port}.localhost" }]
+ *       "hostRoutes": [{ "id": "proxy", "host": "{port}.localhost" }],
+ *       "capabilities": ["feedback"]
  *     }
  *   }
  *
  * The manifest is what the captain agrees to at install, so it is the source
  * of the plugin's identity and enablement, and it must declare every
  * contribution, service, MCP server and host route the server entry exports;
- * its address rewrites are the manifest's alone. `settings`
+ * its address rewrites and capabilities are the manifest's alone. `settings`
  * declares what the plugin needs to know (its `ctx.settings`): `wheelhouse
  * plugin install` asks for each and writes the answers to the plugins file.
  * Unknown fields are refused, as in the plugins file.
@@ -70,7 +71,8 @@ export const WHEELHOUSE_FIELDS = [
 	'settings',
 	'mcpServers',
 	'addressRewrites',
-	'hostRoutes'
+	'hostRoutes',
+	'capabilities'
 ] as const;
 
 /** The fields a declared setting may have. */
@@ -147,6 +149,8 @@ export interface PluginManifest {
 		addressRewrites: { id: string; to: string }[];
 		/** Host templates whose requests go to its server entry. */
 		hostRoutes: { id: string; host: string }[];
+		/** What it may do beyond reading; none when it declares none. */
+		capabilities: Capability[];
 	};
 }
 
@@ -219,7 +223,8 @@ function wheelhouse(v: unknown): PluginManifest['wheelhouse'] {
 		settings: settings(v.settings),
 		mcpServers: [],
 		addressRewrites: hosts(v.addressRewrites, 'addressRewrites', 'to'),
-		hostRoutes: hosts(v.hostRoutes, 'hostRoutes', 'host')
+		hostRoutes: hosts(v.hostRoutes, 'hostRoutes', 'host'),
+		capabilities: capabilities(v.capabilities)
 	};
 	if (v.enabledByDefault !== undefined) {
 		if (typeof v.enabledByDefault !== 'boolean') {
@@ -287,6 +292,20 @@ function wheelhouse(v: unknown): PluginManifest['wheelhouse'] {
 		}
 	}
 	return w;
+}
+
+function capabilities(v: unknown): Capability[] {
+	if (v === undefined) return [];
+	if (!Array.isArray(v)) throw new Invalid('wheelhouse.capabilities must be a list');
+	const out: Capability[] = [];
+	for (const [i, c] of v.entries()) {
+		if (!CAPABILITIES.includes(c as Capability)) {
+			throw new Invalid(`wheelhouse.capabilities[${i}] must be one of ${CAPABILITIES.join(', ')}`);
+		}
+		if (out.includes(c as Capability)) throw new Invalid(`it declares capability "${c}" twice`);
+		out.push(c as Capability);
+	}
+	return out;
 }
 
 /** `addressRewrites` (each `{ id, to }`) or `hostRoutes` (each `{ id, host }`): ids and host templates. */
@@ -588,7 +607,8 @@ export function fromExport(
 			...r,
 			host: m.wheelhouse.hostRoutes.find((h) => h.id === r.id)!.host
 		})),
-		addressRewrites: m.wheelhouse.addressRewrites.map((r) => ({ ...r }))
+		addressRewrites: m.wheelhouse.addressRewrites.map((r) => ({ ...r })),
+		capabilities: [...m.wheelhouse.capabilities]
 	};
 	delete plugin.enabledByDefault;
 	delete plugin.enabledWhenFile;
