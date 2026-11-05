@@ -181,4 +181,17 @@ describe('chatForms', () => {
 			active: false
 		});
 	});
+
+	it('counts an answer sent from the page once when its own message comes back', () => {
+		const again = `Still green.\n\n${MERGE}`;
+		const items = [turn('t1', [text('p1', MERGE)]), turn('t2', [text('p2', again)])];
+		const sent = { p2: 'Merge' };
+		for (const forms of [
+			chatForms(items, new Set(), [MERGE_ANSWER('Merge')], sent),
+			chatForms([...items, user('u1', MERGE_ANSWER('Merge'))], new Set(), [], sent)
+		]) {
+			expect(forms.get('p1')).toMatchObject({ decided: null, active: false });
+			expect(forms.get('p2')).toMatchObject({ decided: 'Merge', active: false });
+		}
+	});
 });

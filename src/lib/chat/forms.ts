@@ -93,7 +93,8 @@ const fits = (form: DecisionForm, words: string) =>
  * belong to that decision; `pending` the texts of the captain's messages not
  * in the transcript yet, which come after everything in it; `sent` the words
  * decided from this page, by part id, for an answer the transcript does not
- * show (one that went to Firstmate's inbox).
+ * show (one that went to Firstmate's inbox), applied only to a form the
+ * messages left waiting so an answer and its own message count once.
  */
 export function chatForms(
 	items: Item[],
@@ -119,12 +120,13 @@ export function chatForms(
 		for (const p of it.parts) {
 			const reply = p.kind === 'text' ? formAtEnd(p.text) : null;
 			if (!reply) continue;
-			const f: ChatForm = { ...reply, decided: sent[p.id] ?? null, active: false };
+			const f: ChatForm = { ...reply, decided: null, active: false };
 			out.set(p.id, f);
 			asked.push(f);
 		}
 	}
 	for (const text of pending) answer(text);
+	for (const [id, f] of out) f.decided ??= sent[id] ?? null;
 	const seen = new Set<string>();
 	for (const f of asked.toReversed()) {
 		const key = f.form.prompt ? tidy(f.form.prompt) : null;

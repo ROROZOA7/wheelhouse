@@ -67,6 +67,7 @@ afterEach(() => {
 	for (const p of firstmateChat.pending) firstmateChat.dismiss(p.id);
 	firstmateChat.records = [];
 	firstmateChat.session = null;
+	delete (page.data as Record<string, unknown>).health;
 	vi.unstubAllGlobals();
 });
 
@@ -330,7 +331,6 @@ describe('decision forms in the conversation', () => {
 		flushSync();
 		expect(firstmateChat.pending).toHaveLength(0);
 		expect(forms()[0].dataset.chatForm).toBe('answered');
-		delete (page.data as Record<string, unknown>).health;
 	});
 
 	it('keeps an example block earlier in the reply in its words', () => {
