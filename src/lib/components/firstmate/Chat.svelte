@@ -32,6 +32,7 @@
 	} from '$lib/chat/decisions';
 	import { discussText, parseDiscuss, pendingThreads, threads } from '$lib/chat/discuss';
 	import { duration, finishedMcpCalls, type Item } from '$lib/chat/fold';
+	import { answerText, chatForms } from '$lib/chat/forms';
 	import type { Health } from '$lib/chat/health';
 	import { markdown } from '$lib/chat/markdown';
 	import { pendingLabel } from '$lib/chat/outbox';
@@ -45,6 +46,7 @@
 	import { openedDecisions } from '$lib/client/opened.svelte';
 	import { composerBus } from './bus.svelte';
 	import { currentHealth, currentMessages } from '$lib/client/live.svelte';
+	import type { FormAnswer } from '$lib/decisionform';
 	import { ago } from '$lib/format';
 	import type { InboxView } from '$lib/inbox';
 	import type { Project, TaskSummary } from '$lib/types';
@@ -60,6 +62,7 @@
 	import { chatBatches, placeBatches } from '$lib/chat/batches';
 	import ChatPreview from './ChatPreview.svelte';
 	import Composer from './Composer.svelte';
+	import DecisionForm from './DecisionForm.svelte';
 	import MenuCard from './MenuCard.svelte';
 	import PickerCard from './PickerCard.svelte';
 	import QuestionCard from './QuestionCard.svelte';
@@ -85,7 +88,9 @@
 	 * there as on the Decisions page and folded to its answer after
 	 * (lib/chat/decisions.ts); its Discuss thread holds the captain's questions
 	 * about it and Firstmate's replies, which the conversation leaves out
-	 * (lib/chat/discuss.ts).
+	 * (lib/chat/discuss.ts). A reply of Firstmate's that ends with a
+	 * decision-form block shows that form under its words, answered with a chat
+	 * message naming what the captain decided (lib/chat/forms.ts).
 	 */
 	let {
 		token,
@@ -212,6 +217,21 @@
 	const previews = $derived(previewCards(items, tasks));
 	const projectName = (id: string | null) =>
 		!id || id === 'unassigned' ? null : (projects.find((p) => p.id === id)?.name ?? id);
+
+	// Forms Firstmate asked in the conversation, answered from the transcript, the inbox record and messages being sent.
+	const forms = $derived(
+		chatForms(items, discussed.hidden, firstmateChat.pending, currentMessages()?.messages ?? [])
+	);
+	/** A reply's words as its bubble shows them: without the form it ends with. */
+	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
+
+	function decide(partId: string, a: FormAnswer, note: string | null) {
+		const asked = forms.get(partId);
+		const text = asked ? answerText(asked.form, a, note) : '';
+		// Never typed into an open menu, where Enter would choose for the captain.
+		if (!text || !via || held) return;
+		void firstmateChat.send(text, via, token, working && !waitingOnAnswer);
+	}
 
 	function ask(d: Decision, text: string) {
 		const message = discussText(
@@ -383,7 +403,7 @@
 			if (to.who === 'firstmate' && it.kind === 'turn')
 				for (let pi = it.parts.length - 1; pi >= 0; pi--) {
 					const part = it.parts[pi];
-					if (part.kind === 'text' && quotes(to, part.text)) return part.id;
+					if (part.kind === 'text' && quotes(to, replyWords(part))) return part.id;
 				}
 		}
 		return null;
@@ -848,17 +868,46 @@
 								{/if}
 								{#each item.parts as part, pi (part.id)}
 									{#if part.kind === 'text'}
-										<div class="bubble-row">
+										{@const asked = forms.get(part.id)}
+										{@const words = replyWords(part)}
+										{#if words}<div class="bubble-row">
+												<div
+													class="chat-md bubble bubble-firstmate"
+													data-bubble={part.id}
+													use:swipeToReply={via ? () => startReply('firstmate', words) : null}
+												>
+													<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
+													{@html markdown(words, { docLinks: true })}
+												</div>
+												{#if via}{@render replyButton(part.id, 'firstmate', words)}{/if}
+											</div>{/if}
+										{#if asked}
 											<div
-												class="chat-md bubble bubble-firstmate"
-												data-bubble={part.id}
-												use:swipeToReply={via ? () => startReply('firstmate', part.text) : null}
+												class="w-full max-w-[min(100%,40rem)] rounded-lg border border-l-[3px] bg-card px-4 pt-0.5 pb-3 sm:px-5 {asked.active
+													? 'border-l-sea'
+													: asked.decided !== null
+														? 'border-l-success/70'
+														: 'border-l-hair'}"
+												data-chat-form={asked.active
+													? 'open'
+													: asked.decided !== null
+														? 'answered'
+														: 'replaced'}
 											>
-												<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in markdown() -->
-												{@html markdown(part.text, { docLinks: true })}
+												<DecisionForm
+													form={asked.form}
+													name={part.id}
+													canAnswer={asked.active && !!via && !held}
+													decided={asked.decided}
+													onAnswer={(a, note) => decide(part.id, a, note)}
+												/>
+												{#if !asked.active && asked.decided === null}
+													<p class="mt-2 text-xs text-muted-foreground">
+														A later question from Firstmate replaced this one.
+													</p>
+												{/if}
 											</div>
-											{#if via}{@render replyButton(part.id, 'firstmate', part.text)}{/if}
-										</div>
+										{/if}
 										{#each matchBridgeCards(part.text, pluginEntries) as { entry, card } (`${entry.key}:${card.key}`)}
 											<div
 												class="max-w-[80ch] rounded-xl border bg-card p-4"
