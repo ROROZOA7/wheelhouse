@@ -4,9 +4,10 @@
 	 * two plain answers as one-tap buttons, options picked and then decided,
 	 * the card's own calls (several, or written), or a written answer. A note
 	 * can go with any of them. The answer is sent by the parent (onAnswer),
-	 * through the inbox, never to a worker directly.
+	 * through the inbox or as a chat message, never to a worker directly. Once
+	 * answered (`decided`), it shows what was decided instead of its controls.
 	 */
-	import { Check, PenLine } from '@lucide/svelte';
+	import { Check, CircleCheck, PenLine } from '@lucide/svelte';
 	import type { DecisionForm, FormAnswer } from '$lib/decisionform';
 	import { DECIDED_MAX } from '$lib/decisionform';
 	import {
@@ -23,12 +24,15 @@
 		form,
 		name,
 		canAnswer = true,
+		decided = null,
 		onAnswer
 	}: {
 		form: DecisionForm;
 		/** Unique per card, for the radio groups. */
 		name: string;
 		canAnswer?: boolean;
+		/** The words decided, once answered: shown in place of the controls. */
+		decided?: string | null;
 		onAnswer: (answer: FormAnswer, note: string | null) => void;
 	} = $props();
 
@@ -54,7 +58,13 @@
 <div class="mt-3" data-decision-form={form.kind} data-form-from={form.from}>
 	{#if form.prompt}<p class="text-sm leading-snug font-medium">{form.prompt}</p>{/if}
 
-	{#if form.kind === 'buttons'}
+	{#if decided !== null}
+		<p class="mt-2 flex items-start gap-1.5 text-sm leading-snug" data-decided>
+			<CircleCheck class="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true" /><span
+				>You decided <span class="font-semibold">{decided}</span></span
+			>
+		</p>
+	{:else if form.kind === 'buttons'}
 		<div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Answer">
 			{#each form.options as o (o.id)}
 				<button
@@ -199,7 +209,9 @@
 		</form>
 	{/if}
 
-	{#if noting}
+	{#if decided !== null}
+		<!-- Answered: nothing more to add here. -->
+	{:else if noting}
 		<label class="mt-2 block">
 			<span class="sr-only">Note for Firstmate (optional)</span>
 			<textarea

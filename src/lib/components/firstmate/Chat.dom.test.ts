@@ -63,6 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	unmount(app);
+	for (const p of firstmateChat.pending) firstmateChat.dismiss(p.id);
 	firstmateChat.records = [];
 	firstmateChat.session = null;
 	vi.unstubAllGlobals();
@@ -172,5 +173,91 @@ describe('replies in the chat', () => {
 			expect(vibrate).not.toHaveBeenCalled();
 			expect(draft()).toBeNull();
 		});
+	});
+});
+
+describe('decision forms in the conversation', () => {
+	const ASK =
+		'Two ways to go.\n\n```decision-form\nWhich should ship?\n- Welcome page, tour behind a link: a link opens it (recommended)\n- Welcome page only\n- (written)\n```';
+	const MERGE = 'Checks are green.\n\n```decision-form\nMerge it now?\n- Merge\n- Not yet\n```';
+	const show = (...records: ReturnType<typeof record>[]) => {
+		firstmateChat.records = [captain('u1', '10', 'How should onboarding work?'), ...records];
+		flushSync();
+	};
+	const forms = () => [...document.querySelectorAll<HTMLElement>('[data-chat-form]')];
+	const sentText = () => {
+		const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/firstmate/input')!;
+		return JSON.parse((init as RequestInit).body as string).text;
+	};
+
+	it('shows a reply’s form as controls under its words, not as the raw block', () => {
+		show(firstmate('a1', '11', ASK));
+		const bubble = bubbles().find((b) => b.dataset.bubble === 'a1-t')!;
+		expect(bubble.textContent!.trim()).toBe('Two ways to go.');
+		expect(document.body.textContent).not.toContain('decision-form');
+		const [form] = forms();
+		expect(form.dataset.chatForm).toBe('open');
+		expect(form.textContent).toContain('Which should ship?');
+		expect(form.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+	});
+
+	it('sends the pick as the captain’s message, then shows what was decided', async () => {
+		show(firstmate('a1', '11', MERGE));
+		const merge = [...forms()[0].querySelectorAll('button')].find((b) =>
+			b.textContent!.startsWith('Merge')
+		)!;
+		merge.click();
+		flushSync();
+		await vi.waitFor(() => expect(sentText()).toBe('Decided: Merge'));
+		const [form] = forms();
+		expect(form.dataset.chatForm).toBe('answered');
+		expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Merge');
+		expect(form.querySelector('button')).toBeNull();
+	});
+
+	it('reads what was decided back from the transcript', () => {
+		show(firstmate('a1', '11', MERGE), captain('u2', '12', 'Decided: Not yet'));
+		const [form] = forms();
+		expect(form.dataset.chatForm).toBe('answered');
+		expect(form.querySelector('[data-decided]')!.textContent).toContain('You decided Not yet');
+	});
+
+	it('sends a written answer in the captain’s words', async () => {
+		show(firstmate('a1', '11', '```decision-form\nWhich browsers?\n- (written)\n```'));
+		expect(bubbles().find((b) => b.dataset.bubble === 'a1-t')).toBeUndefined();
+		const box = forms()[0].querySelector('textarea')!;
+		box.value = 'The last two years';
+		box.dispatchEvent(new Event('input'));
+		flushSync();
+		forms()[0]
+			.querySelector('form')!
+			.dispatchEvent(new Event('submit', { cancelable: true }));
+		await vi.waitFor(() => expect(sentText()).toBe('Decided: The last two years'));
+	});
+
+	it('answers only the latest open form; one a later form replaced cannot be pressed', () => {
+		show(firstmate('a1', '11', ASK), firstmate('a2', '12', MERGE));
+		const [replaced, latest] = forms();
+		expect(replaced.dataset.chatForm).toBe('replaced');
+		expect(replaced.textContent).toContain('A later question from Firstmate replaced this one.');
+		expect(
+			[...replaced.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')].every(
+				(c) => c.disabled
+			)
+		).toBe(true);
+		expect(latest.dataset.chatForm).toBe('open');
+		expect([...latest.querySelectorAll('button')].some((b) => !b.disabled)).toBe(true);
+	});
+
+	it('cannot be answered while a Claude Code menu is open in the session', () => {
+		show(firstmate('a1', '11', MERGE));
+		firstmateChat.session = { ...firstmateChat.session!, menu: { title: 'Manage MCP servers' } };
+		flushSync();
+		expect([...forms()[0].querySelectorAll('button')].every((b) => b.disabled)).toBe(true);
+	});
+
+	it('leaves a block that does not end the reply as it is written', () => {
+		show(firstmate('a1', '11', `${MERGE}\n\nThat is how a form looks.`));
+		expect(forms()).toHaveLength(0);
 	});
 });

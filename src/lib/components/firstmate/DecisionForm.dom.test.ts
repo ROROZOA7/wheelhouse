@@ -11,10 +11,19 @@ afterEach(() => {
 	document.body.innerHTML = '';
 });
 
-const show = (form: ReturnType<typeof cardForm>, sent: [FormAnswer, string | null][]) => {
+const show = (
+	form: ReturnType<typeof cardForm>,
+	sent: [FormAnswer, string | null][],
+	decided: string | null = null
+) => {
 	app = mount(DecisionForm, {
 		target: document.body,
-		props: { form, name: 'd1', onAnswer: (a: FormAnswer, n: string | null) => sent.push([a, n]) }
+		props: {
+			form,
+			name: 'd1',
+			decided,
+			onAnswer: (a: FormAnswer, n: string | null) => sent.push([a, n])
+		}
 	});
 	flushSync();
 };
@@ -114,5 +123,18 @@ describe('DecisionForm', () => {
 		expect(sent).toEqual([
 			[{ choice: 'approve', picks: null, decided: 'The last two years' }, null]
 		]);
+	});
+
+	it('shows what was decided, with nothing left to press, once answered', () => {
+		show(
+			formIn('```decision-form\nWhich should ship?\n- Welcome page only\n- Three-step tour\n```')!,
+			[],
+			'Three-step tour'
+		);
+		expect(document.body.textContent).toContain('Which should ship?');
+		expect(document.querySelector('[data-decided]')!.textContent!.trim()).toBe(
+			'You decided Three-step tour'
+		);
+		expect(document.querySelectorAll('button, input, textarea')).toHaveLength(0);
 	});
 });
