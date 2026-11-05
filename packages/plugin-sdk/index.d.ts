@@ -302,7 +302,11 @@ export interface FeedbackList {
 	task?: string | null;
 	/** What the list is about, in a few words (e.g. "data/x/plan.md: Request changes"). */
 	subject?: string | null;
-	/** One change per line (at most 30, 500 characters each), with what it points at (200). */
+	/**
+	 * One change per line (at most 30, 500 characters each), with what it points at (200).
+	 * The whole message is also limited to Firstmate's note size (16 KiB); a longer
+	 * list is refused, with the reason.
+	 */
 	items: { text: string; points?: string | null }[];
 }
 

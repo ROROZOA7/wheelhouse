@@ -22,7 +22,18 @@ export async function postFeedback(
 			},
 			body: JSON.stringify(body)
 		});
-		if (res.ok) return { ok: true, pending: res.status === 202 };
+		if (res.ok) {
+			const data = (await res.json().catch(() => null)) as {
+				message?: { delivery?: string; deliveryDetail?: string | null };
+			} | null;
+			if (data?.message?.delivery === 'failed') {
+				return {
+					ok: false,
+					error: data.message.deliveryDetail ?? 'Firstmate did not take the list.'
+				};
+			}
+			return { ok: true, pending: res.status === 202 };
+		}
 		const data = (await res.json().catch(() => null)) as { message?: string } | null;
 		return { ok: false, error: data?.message ?? `Wheelhouse answered ${res.status}.` };
 	} catch {

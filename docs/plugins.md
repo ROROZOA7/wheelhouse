@@ -344,7 +344,7 @@ send.addEventListener('click', async () => {
 });
 ```
 
-- `items` are one change per line (at most 30, each at most 500 characters), each with an optional `points`, what it is about in a few words (at most 200), such as a quote and its line; `subject` (optional, at most 200) says what the whole list is about. Whitespace is folded and empty lines are dropped.
+- `items` are one change per line (at most 30, each at most 500 characters), each with an optional `points`, what it is about in a few words (at most 200), such as a quote and its line; `subject` (optional, at most 200) says what the whole list is about. Whitespace is folded and empty lines are dropped. The whole message Wheelhouse writes is also limited to Firstmate's note size (16 KiB), so a list within each of these limits can still be too long; it is refused, with the reason.
 - `task` is the task the list is about: the entry's own task (`entry.taskId`) in a `task.section` or `step.evidence`, else one the element names. Wheelhouse refuses a task it does not know and one the plugin is off for.
 - The send is the captain's: `sendFeedback` is refused unless it is called while the page still counts the captain's click or key press as just made (the browser's transient activation), so call it in the click handler, before anything else awaits. Nothing is sent by itself, and there is no extra confirmation: the button is the send.
 - It resolves to `{ ok: true, pending }` once Firstmate's inbox has the list (`pending` while Wheelhouse is still confirming it), or `{ ok: false, error }` with the reason, such as a plugin that does not ask for the capability.

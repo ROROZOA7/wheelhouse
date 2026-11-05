@@ -276,6 +276,44 @@ describe('the host API an element gets', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('reports a list Firstmate refused as not sent, with the reason', async () => {
+		const { postFeedback } = await import('$lib/client/feedback');
+		const answers = [
+			new Response(
+				JSON.stringify({
+					replay: false,
+					message: { delivery: 'failed', deliveryDetail: 'fm-inbox.sh exited 1' }
+				}),
+				{ status: 201 }
+			),
+			new Response(JSON.stringify({ replay: true, message: { delivery: 'failed' } }), {
+				status: 200
+			}),
+			new Response(JSON.stringify({ replay: false, message: { delivery: 'delivered' } }), {
+				status: 201
+			}),
+			new Response(JSON.stringify({ replay: false, message: { delivery: 'uncertain' } }), {
+				status: 202
+			})
+		];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => answers.shift())
+		);
+		const body = { taskId: 't', subject: null, items: [{ text: 'One' }] };
+		expect(await postFeedback('acme', body, 'tok')).toEqual({
+			ok: false,
+			error: 'fm-inbox.sh exited 1'
+		});
+		expect(await postFeedback('acme', body, 'tok')).toEqual({
+			ok: false,
+			error: 'Firstmate did not take the list.'
+		});
+		expect(await postFeedback('acme', body, 'tok')).toEqual({ ok: true, pending: false });
+		expect(await postFeedback('acme', body, 'tok')).toEqual({ ok: true, pending: true });
+		vi.unstubAllGlobals();
+	});
+
 	it('is set on the mounted element, starts its service with the session token, and never shows the token', async () => {
 		let made: PluginElement | null = null;
 		customElements.define(
