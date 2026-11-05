@@ -13,4 +13,4 @@ It lists the open issues in each project's GitHub repository that match the capt
 
 ![A project's Issues tab: its repository, the watch rule, and the open issues that match it, one already in hand with Firstmate](../../docs/screenshots/plugins/github-issues-project.png)
 
-The `bell` and `auto` modes are not this plugin's doing: plugins cannot ring the bell or message Firstmate. Wheelhouse's own issue watcher (`src/lib/server/issues/`) reads this plugin's `watch` provider and does both. See [docs/plugins.md](../../docs/plugins.md#github-issues) for the settings and modes.
+The `bell` and `auto` modes are not this plugin's doing: plugins cannot ring the bell, and this one does not ask for the `feedback` capability, the only way a plugin messages Firstmate. Wheelhouse's own issue watcher (`src/lib/server/issues/`) reads this plugin's `watch` provider and does both. See [docs/plugins.md](../../docs/plugins.md#github-issues) for the settings and modes.
