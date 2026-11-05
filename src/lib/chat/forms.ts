@@ -44,6 +44,12 @@ export interface ReplyForm {
 	words: string;
 }
 
+/** An answer the page sent: the message itself and the words it decided. */
+export interface SentAnswer {
+	text: string;
+	words: string;
+}
+
 /** An answer read back from a message: the words decided and the question it names, if any. */
 export interface Answer {
 	words: string;
@@ -54,6 +60,7 @@ const BLOCK = /```decision-form[^\n]*\n[\s\S]*?(?:```|$)/g;
 const ANSWER = /^Decided: (.+?)(?: — for: “(.+)”)?$/;
 
 const tidy = (s: string) => s.replace(/\s+/g, ' ').trim();
+const message = (s: string) => s.replace(/\r\n?/g, '\n').trim();
 
 /** The form a reply of Firstmate's ends with, and its words before it; null when it does not end with one. */
 export function formAtEnd(text: string): ReplyForm | null {
@@ -92,20 +99,28 @@ const fits = (form: DecisionForm, words: string) =>
  * that asks each. `hidden` are the items in a decision's thread, whose forms
  * belong to that decision; `pending` the texts of the captain's messages not
  * in the transcript yet, which come after everything in it; `sent` the words
- * decided from this page, by part id, for an answer the transcript does not
- * show (one that went to Firstmate's inbox), applied only to a form the
- * messages left waiting so an answer and its own message count once.
+ * decided from this page and the message that sent them, by part id: such a
+ * form stays decided even when its message never shows (one that went to
+ * Firstmate's inbox), and each message the page sent answers only its own
+ * form, once, so it is never counted again for another.
  */
 export function chatForms(
 	items: Item[],
 	hidden: ReadonlySet<string>,
 	pending: string[] = [],
-	sent: Readonly<Record<string, string>> = {}
+	sent: Readonly<Record<string, SentAnswer>> = {}
 ): Map<string, ChatForm> {
 	const out = new Map<string, ChatForm>();
 	// Every form asked so far, oldest first.
 	const asked: ChatForm[] = [];
+	// The page's own sent messages whose echo has not shown yet, oldest first.
+	const unechoed = Object.values(sent).map((a) => message(a.text));
 	const answer = (text: string) => {
+		const echo = unechoed.indexOf(message(text));
+		if (echo >= 0) {
+			unechoed.splice(echo, 1);
+			return;
+		}
 		const a = parseAnswer(text);
 		if (!a) return;
 		const to = a.question
@@ -120,13 +135,12 @@ export function chatForms(
 		for (const p of it.parts) {
 			const reply = p.kind === 'text' ? formAtEnd(p.text) : null;
 			if (!reply) continue;
-			const f: ChatForm = { ...reply, decided: null, active: false };
+			const f: ChatForm = { ...reply, decided: sent[p.id]?.words ?? null, active: false };
 			out.set(p.id, f);
 			asked.push(f);
 		}
 	}
 	for (const text of pending) answer(text);
-	for (const [id, f] of out) f.decided ??= sent[id] ?? null;
 	const seen = new Set<string>();
 	for (const f of asked.toReversed()) {
 		const key = f.form.prompt ? tidy(f.form.prompt) : null;

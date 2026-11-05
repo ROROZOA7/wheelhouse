@@ -32,7 +32,7 @@
 	} from '$lib/chat/decisions';
 	import { discussText, parseDiscuss, pendingThreads, threads } from '$lib/chat/discuss';
 	import { duration, finishedMcpCalls, type Item } from '$lib/chat/fold';
-	import { answerText, chatForms } from '$lib/chat/forms';
+	import { answerText, chatForms, type SentAnswer } from '$lib/chat/forms';
 	import type { Health } from '$lib/chat/health';
 	import { markdown } from '$lib/chat/markdown';
 	import { pendingLabel } from '$lib/chat/outbox';
@@ -219,7 +219,7 @@
 		!id || id === 'unassigned' ? null : (projects.find((p) => p.id === id)?.name ?? id);
 
 	// Forms Firstmate asked in the conversation; what was decided from this page, by reply part.
-	let decidedHere = $state<Record<string, string>>({});
+	let decidedHere = $state<Record<string, SentAnswer>>({});
 	const forms = $derived(
 		chatForms(
 			items,
@@ -231,11 +231,10 @@
 	/** A reply's words as its bubble shows them: without the form it ends with. */
 	const replyWords = (part: { id: string; text: string }) => forms.get(part.id)?.words ?? part.text;
 
-	// Answers sent from this page, by message text: the reply part each answers and the words decided.
-	const answers: Record<string, { partId: string; words: string }> = {};
-	const delivered = (text: string) => {
-		const a = answers[text];
-		if (a) decidedHere = { ...decidedHere, [a.partId]: a.words };
+	// Answers sent from this page, by reply part, delivered or not.
+	const answers: Record<string, SentAnswer> = {};
+	const delivered = (partId: string) => {
+		decidedHere = { ...decidedHere, [partId]: answers[partId] };
 	};
 
 	async function decide(partId: string, a: FormAnswer, note: string | null) {
@@ -243,15 +242,16 @@
 		const text = asked ? answerText(asked.form, a, note) : '';
 		// Never typed into an open menu, where Enter would choose for the captain.
 		if (!text || !via || held) return;
-		answers[text] = { partId, words: a.decided ?? '' };
+		answers[partId] = { text, words: a.decided ?? '' };
 		const r = await firstmateChat.send(text, via, token, working && !waitingOnAnswer);
-		if (r.ok) delivered(text);
+		if (r.ok) delivered(partId);
 	}
 
 	async function retry(id: string) {
 		const text = firstmateChat.pending.find((p) => p.id === id)?.text;
 		const r = await firstmateChat.retry(id, token, working && !waitingOnAnswer);
-		if (text && r?.ok) delivered(text);
+		const partId = Object.keys(answers).find((k) => answers[k].text === text && !decidedHere[k]);
+		if (partId && r?.ok) delivered(partId);
 	}
 
 	function ask(d: Decision, text: string) {
