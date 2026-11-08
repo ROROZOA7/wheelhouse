@@ -118,8 +118,14 @@ export const codeOf = (r: string | { code: string; detail?: string }) =>
 export function matrixRows(
 	r: PackResolve
 ): { kind: string; label: string; delivery: DeliveryMap; state?: string }[] {
+	// resolve gives one row per (phase, skill); delivery is the skill's, so list each skill once.
+	const skills = new Map<string, ResolvedSkill>();
+	for (const s of r.skills) {
+		const seen = skills.get(s.name);
+		if (!seen || (seen.state === 'disabled' && s.state === 'active')) skills.set(s.name, s);
+	}
 	return [
-		...r.skills.map((s) => ({
+		...[...skills.values()].map((s) => ({
 			kind: 'Skill',
 			label: s.name,
 			delivery: s.delivery,
@@ -146,4 +152,22 @@ export interface PlaybooksView {
 	source: PlaybooksSource;
 	list: Read<PackList> | null;
 	resolve: Read<PackResolve> | null;
+}
+
+export const PHASES = ['task', 'build', 'verify', 'review'] as const;
+export const PHASE_LABEL: Record<ResolvedSkill['phase'], string> = {
+	task: 'For the task',
+	build: 'Build',
+	verify: 'Verify',
+	review: 'Review'
+};
+
+/** resolve's (phase, skill) rows grouped by phase, in the order a task runs them; empty phases left out. */
+export function skillsByPhase(
+	r: PackResolve
+): { phase: ResolvedSkill['phase']; skills: ResolvedSkill[] }[] {
+	return PHASES.map((phase) => ({
+		phase,
+		skills: r.skills.filter((s) => s.phase === phase)
+	})).filter((g) => g.skills.length);
 }

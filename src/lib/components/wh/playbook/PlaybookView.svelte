@@ -6,6 +6,8 @@
 		HARNESSES,
 		matrixRows,
 		ORIGIN_LABEL,
+		PHASE_LABEL,
+		skillsByPhase,
 		shortDigest,
 		type Delivery,
 		type PackResolve
@@ -69,31 +71,37 @@
 
 	<section class="mt-8" aria-labelledby="pb-skills">
 		<h2 id="pb-skills" class="text-sm font-medium">Skills</h2>
-		<ul class="mt-3 divide-y rounded-lg border">
-			{#each r.skills as s (s.name)}
-				<li
-					class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm"
-					data-skill={s.name}
-					data-state={s.state}
-				>
-					<code
-						class="font-mono {s.state === 'disabled' ? 'text-muted-foreground line-through' : ''}"
-						>{s.name}</code
+		{#each skillsByPhase(r) as g (g.phase)}
+			<h3 class="mt-4 text-xs font-medium text-muted-foreground" data-phase={g.phase}>
+				{PHASE_LABEL[g.phase]}
+			</h3>
+			<ul class="mt-1.5 divide-y rounded-lg border">
+				{#each g.skills as s (s.name)}
+					<li
+						class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm"
+						data-skill={s.name}
+						data-skill-phase={g.phase}
+						data-state={s.state}
 					>
-					<span class="text-xs text-muted-foreground"
-						>{s.phase === 'task' ? (s.kinds?.length ? s.kinds.join(', ') : 'task') : s.phase}</span
-					>
-					{#if s.conditional}
-						<span class="text-xs {s.conditional.holds ? 'text-muted-foreground' : 'text-warning'}"
-							>when {s.conditional.when}{s.conditional.holds ? '' : ' (not met)'}</span
+						<code
+							class="font-mono {s.state === 'disabled' ? 'text-muted-foreground line-through' : ''}"
+							>{s.name}</code
 						>
-					{/if}
-					<span class="ml-auto text-xs text-muted-foreground"
-						>{s.state === 'disabled' ? 'Turned off by ' : ''}{ORIGIN_LABEL[s.origin]}</span
-					>
-				</li>
-			{/each}
-		</ul>
+						{#if g.phase === 'task' && s.kinds?.length}
+							<span class="text-xs text-muted-foreground">{s.kinds.join(', ')}</span>
+						{/if}
+						{#if s.conditional}
+							<span class="text-xs {s.conditional.holds ? 'text-muted-foreground' : 'text-warning'}"
+								>when {s.conditional.when}{s.conditional.holds ? '' : ' (not met)'}</span
+							>
+						{/if}
+						<span class="ml-auto text-xs text-muted-foreground"
+							>{s.state === 'disabled' ? 'Turned off by ' : ''}{ORIGIN_LABEL[s.origin]}</span
+						>
+					</li>
+				{/each}
+			</ul>
+		{/each}
 	</section>
 
 	{#if r.banned.length}

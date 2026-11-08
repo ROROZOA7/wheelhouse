@@ -113,6 +113,23 @@
 			}
 		},
 		{
+			"id": "code-review",
+			"name": "core:code-review",
+			"phase": "verify",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/code-review/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
 			"id": "pr-security-review",
 			"name": "core:pr-security-review",
 			"phase": "verify",

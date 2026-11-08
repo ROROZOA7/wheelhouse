@@ -36,6 +36,14 @@ describe('PlaybookView', () => {
 		expect(firstRow.textContent).toContain('Advisory');
 	});
 
+	it('lists a skill under each phase that runs it', () => {
+		const el = render(fixture);
+		const phases = [...el.querySelectorAll('[data-skill="core:code-review"]')].map((e) =>
+			e.getAttribute('data-skill-phase')
+		);
+		expect(phases.sort()).toEqual(['review', 'verify']);
+	});
+
 	it('keeps a turned-off skill listed, and shows what was ignored', () => {
 		const el = render(fixture);
 		expect(el.querySelector('[data-skill="core:visual"]')?.getAttribute('data-state')).toBe(
