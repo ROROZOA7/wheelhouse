@@ -13,6 +13,8 @@ import {
 	type FirstmateInstall
 } from './firstmate/install';
 import { LedgerReader } from './firstmate/ledger';
+import { PlaybookReader } from './playbooks/reader';
+import type { PlaybooksView } from '../playbooks';
 import { parseProjectsRegistry, UNASSIGNED } from './firstmate/model';
 import { Collector } from './collector/collector';
 import { ShipsBell } from './bell/bell';
@@ -131,6 +133,8 @@ export type Runtime =
 			vault: VaultService;
 			/** Requests for `*.localhost` names, handed to the plugin whose host route answers each. */
 			hosts: HostRouter;
+			/** Firstmate's per-project playbooks, read through fm-pack.sh (read-only). */
+			playbooks: PlaybookReader;
 	  }
 	| { configured: false; error: string };
 
@@ -182,6 +186,14 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		collector.changeRoute(id)
 	);
 	const passages = await createPassages(install, env);
+	// WHEELHOUSE_PLAYBOOK_FIXTURE stands in for fm-pack.sh in development, until it lands.
+	const playbooks = new PlaybookReader({
+		firstmateDir: install.firstmateDir,
+		homeDir: install.homeDir,
+		env,
+		fixtureDir: env.WHEELHOUSE_PLAYBOOK_FIXTURE || null
+	});
+	void playbooks.source();
 	const bell = new ShipsBell();
 	const collector = new Collector({
 		adapter,
@@ -198,6 +210,7 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		messenger: messaging.messenger,
 		messagingUnavailable: messaging.reason ?? undefined,
 		passages,
+		playbooks,
 		insights,
 		build,
 		bell
@@ -368,7 +381,8 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		inbox,
 		gateway,
 		vault,
-		hosts
+		hosts,
+		playbooks
 	};
 }
 
@@ -699,6 +713,8 @@ export function unconfiguredHealth(error: string): Health {
 			lastError: null
 		},
 		ledger: { available: false, reason: null },
+		contracts: { 'fm-pack.v1': false },
+		playbooks: { available: false, reason: error },
 		messaging: { available: false, reason: error, store: null },
 		passages: { configDir: null, problem: error, checksRunning: 0 }
 	};
@@ -1031,4 +1047,25 @@ export async function currentPullRequestTabs(): Promise<PullRequestTabs> {
 export async function currentInbox(): Promise<InboxView> {
 	const r = await getRuntime();
 	return r.configured ? r.inbox.view() : unavailableInbox(r.error);
+}
+
+/** Firstmate's playbooks for the catalog and a project's Playbook tab; read-only. */
+export async function currentPlaybooks(project: string | null): Promise<PlaybooksView> {
+	const r = await getRuntime();
+	if (!r.configured) {
+		return {
+			schema: 'wheelhouse-playbooks.v1',
+			source: { available: false, reason: r.error },
+			list: null,
+			resolve: null
+		};
+	}
+	const source = await r.playbooks.source();
+	if (!source.available)
+		return { schema: 'wheelhouse-playbooks.v1', source, list: null, resolve: null };
+	const [list, resolve] = await Promise.all([
+		r.playbooks.list(),
+		project ? r.playbooks.resolve(project) : Promise.resolve(null)
+	]);
+	return { schema: 'wheelhouse-playbooks.v1', source, list, resolve };
 }

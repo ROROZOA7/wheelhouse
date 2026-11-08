@@ -1,0 +1,246 @@
+{
+	"schema": "fm-pack.v1",
+	"generated_at": "2026-11-08T12:00:00Z",
+	"fm_home": "/home/captain/crew",
+	"project": "wheelhouse",
+	"binding": {
+		"pack": "core",
+		"version": "0.1.0",
+		"digest": "sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a",
+		"binding_digest": "sha256:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b"
+	},
+	"skills": [
+		{
+			"id": "tdd",
+			"name": "core:tdd",
+			"phase": "task",
+			"kinds": ["bug", "feature", "refactor", "default"],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/tdd/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "implement",
+			"name": "core:implement",
+			"phase": "task",
+			"kinds": ["feature", "default"],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/implement/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "diagnosing-bugs",
+			"name": "core:diagnosing-bugs",
+			"phase": "task",
+			"kinds": ["bug", "default"],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/diagnosing-bugs/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "codebase-design",
+			"name": "core:codebase-design",
+			"phase": "task",
+			"kinds": ["feature", "refactor", "default"],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/codebase-design/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "verification-before-completion",
+			"name": "core:verification-before-completion",
+			"phase": "build",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/verification-before-completion/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "code-review",
+			"name": "core:code-review",
+			"phase": "review",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/code-review/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "pr-security-review",
+			"name": "core:pr-security-review",
+			"phase": "verify",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/pr-security-review/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "vitest",
+			"name": "core:vitest",
+			"phase": "task",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/vitest/SKILL.md",
+			"origin": "pack",
+			"state": "active",
+			"conditional": {
+				"when": "file:vitest.config.*",
+				"holds": true
+			},
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "visual",
+			"name": "core:visual",
+			"phase": "verify",
+			"kinds": [],
+			"source": "vendored",
+			"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/skills/visual/SKILL.md",
+			"origin": "binding",
+			"state": "disabled",
+			"conditional": null,
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		}
+	],
+	"banned": [
+		{
+			"id": "AskUserQuestion",
+			"kind": "tool",
+			"origin": "pack",
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		},
+		{
+			"id": "grilling",
+			"kind": "skill",
+			"origin": "pack",
+			"delivery": {
+				"claude": "advisory",
+				"codex": "advisory",
+				"opencode": "advisory",
+				"pi": "advisory"
+			}
+		}
+	],
+	"hooks": [],
+	"mcp": [],
+	"settings_keys": [],
+	"verify_commands": [
+		{
+			"id": "check",
+			"cmd": "npm run check",
+			"origin": "binding"
+		},
+		{
+			"id": "lint",
+			"cmd": "npm run lint",
+			"origin": "binding"
+		},
+		{
+			"id": "unit",
+			"cmd": "npm run test:unit",
+			"origin": "binding"
+		}
+	],
+	"preamble": {
+		"path": "/home/captain/crew/data/.packs/core/0.1.0/sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a/policy/preamble.md"
+	},
+	"model_hint": {
+		"value": null,
+		"owner": "dispatch"
+	},
+	"evidence": {
+		"required": ["verify_commands", "decisions"]
+	},
+	"project_settings": {
+		"mode": "no-mistakes",
+		"yolo": false,
+		"branch_prefix": "fm/",
+		"forge": "github",
+		"pr_text_mode": null,
+		"merge_policy": null,
+		"sandbox_floor": null,
+		"owner": "captain"
+	},
+	"ignored": [
+		{
+			"item": "skills.allow_global += browser-use",
+			"reason": "repo files may only narrow"
+		}
+	],
+	"readiness": {
+		"ok": true,
+		"missing": [],
+		"warnings": [],
+		"refusals": []
+	}
+}

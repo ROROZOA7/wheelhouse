@@ -8,6 +8,8 @@ import type {
 import { artifactUrl, type EvidenceReader } from '../firstmate/evidence';
 import type { Compatibility } from '../firstmate/install';
 import type { LedgerReader, LedgerTask } from '../firstmate/ledger';
+import type { PlaybookReader } from '../playbooks/reader';
+import type { PlaybooksSource } from '../../playbooks';
 import { changeRoute, readyTimes } from '../firstmate/changes';
 import {
 	backlogOnly,
@@ -58,6 +60,8 @@ export interface CollectorOptions {
 	messenger?: Messenger | null;
 	/** Per-project passages and their checks (the built-ins when absent). */
 	passages?: PassageService | null;
+	/** Firstmate's playbooks (fm-pack.sh), for health's feature detection. */
+	playbooks?: PlaybookReader | null;
 	/** Time splits, work-time estimates, decisions made for the captain, and headroom. */
 	insights?: InsightsService | null;
 	/** The docs each task's session referenced, for the card's hint. */
@@ -483,12 +487,28 @@ export class Collector {
 				lastError: this.lastError
 			},
 			ledger: this.ledgerState(),
+			...this.playbooks(),
 			messaging: this.messaging(),
 			passages: this.opts.passages?.health() ?? {
 				configDir: null,
 				problem: 'Passage files are not set up.',
 				checksRunning: 0
 			}
+		};
+	}
+
+	/** Which optional Firstmate contracts this home offers; the views that need one hide without it. */
+	private playbooks(): Pick<Health, 'contracts' | 'playbooks'> {
+		const r = this.opts.playbooks;
+		if (r) void r.source();
+		const known = r?.known() ?? null;
+		const playbooks: PlaybooksSource = known ?? {
+			available: false,
+			reason: r ? 'Still checking for playbooks.' : 'Playbooks are not set up.'
+		};
+		return {
+			contracts: { 'fm-pack.v1': playbooks.available && playbooks.source === 'fm-pack' },
+			playbooks
 		};
 	}
 

@@ -1,3 +1,4 @@
+import type { PlaybooksSource } from './playbooks';
 /**
  * The Wheelhouse API contract, shared by the server and the UI.
  */
@@ -556,6 +557,10 @@ export interface Health {
 	};
 	/** Firstmate's fleet activity ledger (history that survives cleanup). */
 	ledger: { available: boolean; reason: string | null };
+	/** Optional Firstmate contracts this home offers (docs/playbooks-contracts.md). */
+	contracts: { 'fm-pack.v1': boolean };
+	/** Firstmate's playbooks: from fm-pack.sh, a development fixture, or not available. */
+	playbooks: PlaybooksSource;
 	/** Sending messages to Firstmate through fm-inbox.sh. */
 	messaging: Messaging;
 	/** Passage files and their checks. */

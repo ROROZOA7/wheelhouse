@@ -212,6 +212,8 @@ beforeAll(async () => {
 				// Never the machine's own run logs, transcripts or Claude limits.
 				WHEELHOUSE_NM_LOGS_DIR: path.join(fm.root, 'none'),
 				WHEELHOUSE_NO_USAGE: '1',
+				// No fm-pack.sh in the fake, so the playbook views read the development fixture.
+				WHEELHOUSE_PLAYBOOK_FIXTURE: path.resolve('src/lib/server/playbooks/testdata'),
 				CLAUDE_CONFIG_DIR: path.join(stateDir, 'claude'),
 				// Any tmux call stays on a throwaway server, never the captain's or the crew's.
 				TMUX: '',
@@ -243,6 +245,20 @@ describe('wheelhouse open', () => {
 		});
 		expect(health.firstmate).toMatchObject({ compatible: true, home: fm.root });
 		expect(health.supervisor.onWatch).toBe(true);
+	});
+
+	it('shows a project’s playbook and the catalog, labelled as sample data', async () => {
+		const health = await (await fetch(`${base}/api/health`)).json();
+		expect(health.playbooks).toEqual({ available: true, source: 'fixture', phase: 'A' });
+		expect(health.contracts['fm-pack.v1']).toBe(false);
+		const api = await (await fetch(`${base}/api/playbooks?project=wheelhouse`)).json();
+		expect(api.resolve.value.binding.pack).toBe('core');
+		const tab = await (await fetch(`${base}/projects/wheelhouse/playbook`)).text();
+		expect(tab).toContain('data-binding');
+		expect(tab).toContain('core:tdd');
+		expect(tab).toContain('data-fixture');
+		const catalog = await (await fetch(`${base}/playbooks`)).text();
+		expect(catalog).toContain('data-pack="core"');
 	});
 
 	it('serves the fleet read through fm-fleet-snapshot.sh', async () => {

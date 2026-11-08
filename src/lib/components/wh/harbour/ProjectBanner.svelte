@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { aliases } from '$lib/client/aliases.svelte';
+	import { currentHealth as health } from '$lib/client/live.svelte';
 	import { berth, projectLine } from '$lib/berths';
 	import { ago } from '$lib/format';
 	import { projectTabHref } from '$lib/plugins/keys';
@@ -31,7 +32,7 @@
 		tasks: TaskSummary[];
 		tabs: SlotEntry[];
 		repo: string | null;
-		/** 'work', 'passage', or the current plugin tab's key. */
+		/** 'work', 'passage', 'playbook', or the current plugin tab's key. */
 		current: string;
 		now: number;
 		compact?: boolean;
@@ -86,6 +87,13 @@
 				: project?.passage?.needsConsent
 					? 'Its passage checks need enabling'
 					: undefined}>Passage</a
+		>
+	{/if}
+	{#if id !== 'unassigned' && health()?.playbooks.available}
+		<a
+			href="{base}/playbook"
+			class="nav-tab -mb-px border-b-2"
+			aria-current={current === 'playbook' ? 'page' : undefined}>Playbook</a
 		>
 	{/if}
 	{#if repo}
