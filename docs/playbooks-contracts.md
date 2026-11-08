@@ -12,7 +12,7 @@ Design: [playbooks-architecture.md](playbooks-architecture.md).
 
 ## 1. Layout
 
-**Pack source:** pinned by `{repo, commit, path, tree_digest}`. The repo location is still open: a separate repo (recommended by firstmate) or `packs/` in the firstmate fork.
+**Pack source:** pinned by `{repo, commit, path, tree_digest}`. Pack sources live on the orphan branch **`packs`** of `ROROZOA7/firstmate`, one dir per pack (`core/`). This keeps them out of Firstmate's code, lint and upstream syncs; the captain decided this on 2026-11-08.
 
 ```
 <pack>/
