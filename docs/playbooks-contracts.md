@@ -1,6 +1,6 @@
-# Playbooks contracts: Phase A (v0.2, consolidated)
+# Playbooks contracts: Phase A (v0.3, consolidated)
 
-Status: agreed draft. Reviewed by wheelhouse-discuss (R1–R10) and firstmate-discuss (F1–F9); super-board review of §2 still pending. The final copy moves to the firstmate fork at `docs/contracts/` when `fm-pack.sh` lands.
+Status: agreed draft. Reviewed by wheelhouse-discuss (R1–R10), firstmate-discuss (F1–F9) and super-board-discuss (§2, 13 corrections against the REGISTRY). The final copy moves to the firstmate fork at `docs/contracts/` when `fm-pack.sh` lands.
 Design: [playbooks-architecture.md](playbooks-architecture.md).
 
 ## 0. General rules
@@ -57,34 +57,62 @@ skills:
   vendored:
     - id: tdd
       provenance: {repo: github.com/<owner>/<repo>, commit: <sha>, license: MIT, path: <path>}
-  allow_global: []            # non-vendored names allowed to resolve from global/plugins
-  by_kind:
-    bug:      {required: [diagnosing-bugs, tdd]}
-    feature:  {required: [implement, tdd, codebase-design]}
-    refactor: {required: [codebase-design, tdd]}
-    docs:     {required: []}
-  default:    {required: [diagnosing-bugs, implement, tdd, codebase-design]}   # literal list
+  allow_global: [ponytail, ponytail-review]   # only fallback-backed names
+  aliases: {"mattpocock-skills:tdd": tdd, "ponytail:ponytail": ponytail}
+  by_kind:                       # ordered list; FIRST matching row wins (lowercased labels)
+    - {labels: [bug],                 required: [diagnosing-bugs, tdd]}
+    - {labels: [feature],             required: [implement, tdd, codebase-design]}
+    - {labels: [ux],                  required: [implement, tdd]}
+    - {labels: [refactor, tech-debt], required: [codebase-design, tdd]}
+    - {labels: [tests],               required: [tdd]}
+    - {labels: [docs],                required: []}
+  default: {required: [diagnosing-bugs, tdd, implement, codebase-design]}   # unclassified at intake
   by_phase:
-    build:  {required: [verification-before-completion, code-review], optional: [ponytail]}
-    verify: {required: [tdd, testing-strategy, code-review, pr-security-review]}
-    review: {required: [code-review, codebase-design]}
-  conditional:
-    - {id: vitest, when: "file:vitest.config.*"}   # v1 grammar: file:<glob> only, on origin/<default>
+    build:
+      required: [build-method, ponytail, verification-before-completion, code-review]
+      optional: [testing-strategy, resolving-merge-conflicts, domain-modeling]
+      conditional:
+        - {id: vitest, when: "file:vitest.config.*"}
+        - {id: playwright-best-practices, when: "file:playwright.config.*"}
+    verify:
+      required: [tdd, diagnosing-bugs, verification-before-completion, testing-strategy, code-review, pr-security-review]
+      conditional:
+        - {id: vitest, when: "file:vitest.config.*"}
+        - {id: playwright-best-practices, when: "file:playwright.config.*"}
+    review:
+      required: [review-method, code-review, codebase-design]
+      optional: [ponytail-review]
   fallbacks:
-    - {for: ponytail, path: policy/fallbacks/simplest-solution-first.md}  # a fallback for a non-vendored skill implies allow_global
+    - {for: ponytail,        path: policy/fallbacks/simplest-solution-first.md}
+    - {for: ponytail-review, path: policy/fallbacks/over-engineering-ladder.md}
 banned_tools: [AskUserQuestion]          # Phase B → permissions.deny
-banned_skills: [grilling, shape, clarify]   # advisory only
+banned_skills: [grilling, shape, clarify, improve-codebase-architecture]   # advisory; matches namespaced variants too
 preamble: policy/preamble.md
-verify_commands:                          # pack default; a binding may replace it
-  - {id: unit, cmd: "npm run test:unit"}
+verify_commands: []                       # the gate invents none; bindings supply them
 evidence:
   required: [verify_commands, decisions]
 model_hint: null
 settings: {}                              # reserved for Phase B; non-empty is refused in Phase A
 ```
-- Required skills = `by_kind[kind]` ∪ `by_phase[*].required`.
-- Each resolved skill carries `phase` ∈ `build|verify|review|task`.
-- An unknown `when` grammar refuses with `unknown-condition`.
+
+**Resolution rules** (mirroring super-board's `super-board-skills-ready.py` REGISTRY at d0b7d5a):
+- **Phases a task runs:** build, verify, review. A `qa`-labelled task skips build.
+- **Required** = `by_kind` row (only when build is among the task's phases) ∪ `by_phase[p].required` for each phase p the task will run.
+  - `by_kind` picks the first row whose labels match.
+  - With no matching row, or no labels, `default` applies.
+  - The REGISTRY's second default (`[tdd]` for an unlabelled card re-entering build) is dropped for Firstmate.
+- **Fallbacks:** a required skill that has a fallback is satisfied by the fallback text when the skill isn't visible. Readiness stays ok.
+- **Situational skills:**
+  - `optional` skills are offered to the worker, which decides at use time.
+  - `conditional` uses the v1 grammar `file:<glob>`, evaluated on `origin/<default>`. Any other grammar refuses with `unknown-condition`.
+- **Output:** one row per (phase, skill), with phase ∈ `build|verify|review` and the by_kind row as `task`. Duplicates within a phase are merged; required beats conditional or optional, and origins are joined.
+- **Names:** a foreign namespace (`x:tdd`) is stripped via `aliases`, or when the bare id is vendored or fallback-backed. Otherwise it refuses with `unknown-skill`. Banned matching also covers `<ns>:<banned>`.
+- **Ticket `Skills:` line:**
+  - It REPLACES the by_kind row only; phase skills still apply.
+  - If the task starts past build, the names are ADDED as required to the phases it runs.
+  - Lines inside code fences are ignored, and backticked names are allowed.
+  - Refusals: `skills-override-conflict` (two conflicting lines), `banned-skill`, `unknown-skill`.
+- **Lane methods:** `build-method` (the super-build method minus board glue) and `review-method` (the super-review method) are vendored skills.
 
 **Install refuses when:**
 - the tree has symlinks
@@ -93,6 +121,8 @@ settings: {}                              # reserved for Phase B; non-empty is r
 - `settings` is non-empty
 - `plugin.json` `name` ≠ `name`
 - `requires` is unsupported
+
+**Licences:** mattpocock/skills is MIT; verification-before-completion (obra/superpowers) is MIT; testing-strategy (anthropics/knowledge-work-plugins) is **Apache-2.0**, so it needs the licence text plus a changes notice in NOTICES.md; pr-security-review is MIT © Anthropic.
 
 **Pilot binding (wheelhouse):** `verify_commands` = `npm run check`, `npm run lint`, `npm run test:unit`.
 
@@ -145,6 +175,7 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<digest>/
 - **Unbound project:** `binding:null`, `readiness:{ok:true, note:"no pack bound"}`, so today's behaviour is unchanged.
 - **Readiness refusal codes:**
   - `missing-skill` (a vendored file is absent)
+  - `unknown-skill`, `banned-skill`, `skills-override-conflict`
   - `no-verify-commands`
   - `secret-worktreeinclude` (`.worktreeinclude` on `origin/<default>` matches `.env*`, `*.pem`, `*.key`, `credentials*`)
   - `pack-not-installed`
