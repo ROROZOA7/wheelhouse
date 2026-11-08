@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasDetail, openByDefault, pickTab, stepGist, taskTabs } from './taskpage';
+import { hasDetail, openByDefault, pickTab, prState, stepGist, taskTabs } from './taskpage';
 import type { PassageStep, TaskEvidence, TaskSummary } from './types';
 
 const step = (o: Partial<PassageStep> = {}): PassageStep => ({
@@ -122,5 +122,18 @@ describe('stages', () => {
 			pr: { url: 'https://github.com/o/r/pull/9', number: 9 } as TaskSummary['pr']
 		});
 		expect(stepGist(step({ evidence: ['pr'] }), t, ev())).toBe('Pull request #9');
+	});
+});
+
+describe('pull request state', () => {
+	it('names a draft before its state', () => {
+		expect(prState('open', true)).toBe('draft');
+	});
+	it('keeps known states and an unknown one as reported', () => {
+		expect(prState('merged', false)).toBe('merged');
+		expect(prState('closed', null)).toBe('closed');
+		expect(prState('open', false)).toBe('open');
+		expect(prState('QUEUED', false)).toBe('QUEUED');
+		expect(prState(null, null)).toBe('state unknown');
 	});
 });
