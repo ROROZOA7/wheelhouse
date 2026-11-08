@@ -261,6 +261,16 @@ describe('wheelhouse open', () => {
 		expect(catalog).toContain('data-pack="core"');
 	});
 
+	it('answers how a task’s worker worked, honestly off when transcripts are not read', async () => {
+		const res = await fetch(`${base}/api/tasks/wh-1/how`);
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({
+			available: false,
+			reason: expect.stringMatching(/turned off/)
+		});
+		expect((await fetch(`${base}/api/tasks/nope/how`)).status).toBe(404);
+	});
+
 	it('serves the fleet read through fm-fleet-snapshot.sh', async () => {
 		const fleet = await waitFor(async () => {
 			const f = await (await fetch(`${base}/api/fleet`)).json();

@@ -69,6 +69,19 @@ describe('task page tabs', () => {
 	});
 });
 
+describe('how it worked tab', () => {
+	it('sits after the build tabs, before Screenshots, when asked for', () => {
+		const ids = taskTabs({
+			preview: false,
+			shots: 0,
+			plugins: [],
+			build: { talk: 0, docs: 0 },
+			how: true
+		}).map((t) => t.id);
+		expect(ids).toEqual(['stages', 'talk', 'checks', 'docs', 'how', 'screenshots', 'log']);
+	});
+});
+
 describe('stages', () => {
 	it('expands only the current stage', () => {
 		expect(openByDefault(step({ state: 'current' }))).toBe(true);

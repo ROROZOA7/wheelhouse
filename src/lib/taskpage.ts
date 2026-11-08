@@ -21,6 +21,8 @@ export function taskTabs(o: {
 	shots: number;
 	plugins: { key: string; title: string }[];
 	build?: { talk: number; docs: number };
+	/** How the worker worked, from its session (a Claude Code worker's, for now). */
+	how?: boolean;
 }): TaskTab[] {
 	const counted = (n: number) => (n ? { count: n } : {});
 	return [
@@ -33,6 +35,7 @@ export function taskTabs(o: {
 					{ id: 'docs', label: 'Docs', ...counted(o.build.docs) }
 				]
 			: []),
+		...(o.how ? [{ id: 'how', label: 'How it worked' }] : []),
 		{ id: 'screenshots', label: 'Screenshots', ...counted(o.shots) },
 		...o.plugins.map((p) => ({ id: `plugin:${p.key}`, label: p.title })),
 		{ id: 'log', label: 'Log' }

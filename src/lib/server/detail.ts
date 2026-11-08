@@ -2,6 +2,7 @@ import { getRuntime, type Runtime } from './runtime';
 import { GAPS } from './firstmate/model';
 import type { BuildContext } from './buildlog/reader';
 import type { DocView } from '../buildlog';
+import type { HowItWorked } from '../howitworked';
 import { checksLine } from '../checks';
 import type {
 	DecisionView,
@@ -166,4 +167,27 @@ export async function taskDoc(
 		: { available: false, reason: 'The task’s worktree is no longer there.' };
 	const ctx = buildContext(runtime, task, files, runtime.insights.decisions(task.id));
 	return { ok: true, task, doc: await runtime.build.doc(ctx, file) };
+}
+
+/** How a task's worker worked, from its session's transcripts (the How it worked tab). */
+export async function taskHowItWorked(
+	id: string
+): Promise<{ ok: true; value: HowItWorked } | { ok: false; status: 404 | 503; message: string }> {
+	const runtime = await getRuntime();
+	if (!runtime.configured) return { ok: false, status: 503, message: runtime.error };
+	const task = runtime.collector.getFleet().tasks.find((t) => t.id === id);
+	if (!task) return { ok: false, status: 404, message: `There is no task called ${id}.` };
+	const row = runtime.collector.row(task.id);
+	const ledger = runtime.collector.ledgerTask(task.id);
+	// The task's window: from its dispatch until it was merged or cleaned up (open while live).
+	const end = ledger?.merged?.ts ?? ledger?.cleanedUpAt ?? null;
+	const value = await runtime.howItWorked.read({
+		id: task.id,
+		harness: task.worker?.harness ?? ledger?.dispatched?.harness ?? null,
+		worktree: row?.worktree.path ?? null,
+		branch: task.branch ?? `fm/${task.id}`,
+		since: ledger?.dispatched ? ledger.dispatched.ts * 1000 : null,
+		until: end === null ? null : end * 1000
+	});
+	return { ok: true, value };
 }

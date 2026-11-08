@@ -14,6 +14,8 @@ import {
 } from './firstmate/install';
 import { LedgerReader } from './firstmate/ledger';
 import { PlaybookReader } from './playbooks/reader';
+import { HowItWorkedService } from './howitworked/service';
+import { ClaudeTranscripts } from './howitworked/claude';
 import type { PlaybooksView } from '../playbooks';
 import { parseProjectsRegistry, UNASSIGNED } from './firstmate/model';
 import { Collector } from './collector/collector';
@@ -135,6 +137,8 @@ export type Runtime =
 			hosts: HostRouter;
 			/** Firstmate's per-project playbooks, read through fm-pack.sh (read-only). */
 			playbooks: PlaybookReader;
+			/** How each worker worked, from its harness's own session records. */
+			howItWorked: HowItWorkedService;
 	  }
 	| { configured: false; error: string };
 
@@ -196,6 +200,11 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		onchange: () => collector.healthChanged()
 	});
 	void playbooks.source();
+	// Only Claude Code sessions can be read for now; other harnesses show "not available".
+	const howItWorked = new HowItWorkedService(
+		[new ClaudeTranscripts(env.WHEELHOUSE_NO_USAGE === '1' ? null : projectsDir(env))],
+		install.homeDir
+	);
 	const bell = new ShipsBell();
 	const collector = new Collector({
 		adapter,
@@ -384,7 +393,8 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		gateway,
 		vault,
 		hosts,
-		playbooks
+		playbooks,
+		howItWorked
 	};
 }
 
