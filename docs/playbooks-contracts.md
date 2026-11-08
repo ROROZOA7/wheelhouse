@@ -25,10 +25,13 @@ Design: [playbooks-architecture.md](playbooks-architecture.md).
 ```
 
 **Installed (immutable):** `data/.packs/<name>/<version>/<tree_digest>/`.
-- **tree_digest** = sha256 over the sorted lines `<mode> <sha256> <relpath>\n`.
-  - mode is 755 or 644
-  - regular files only; no symlinks or hardlinks; nothing group/world-writable
-  - at most 4096 entries / 64 MiB (the same rules as extension-bindings)
+- **tree_digest** = sha256 over the concatenation of lines `<mode> <sha256hex> <relpath>\n`, sorted by code point (Python `str` order).
+  - `mode` is **normalised**: `755` if any execute bit is set, else `644`. Git stores only these two, so the digest doesn't depend on the checkout's umask.
+  - `relpath` uses `/` separators.
+  - Regular files only, `nlink == 1`. Symlinks, hardlinks or other file types are refused.
+  - At most 4096 entries / 64 MiB (the same as extension-bindings).
+  - The "not group/world-writable" rule applies to the **installed** copy: `install` chmods every file to 644/755 when it copies into `data/.packs`. It does not apply to the source checkout.
+  - Reference value: pilot pack `core` at `packs`-branch commit 8cfc8c4 → `sha256:e600e53e960d4845633b01b090555e2e57fa9262f1a2b5f53da6ee32b34cf195` (118 files).
 - If the tree no longer hashes to its dir name, the result is `digest-mismatch`.
 
 **Binding** (captain-owned; Wheelhouse never writes it): `data/.pack-bindings/<project>.yaml`
