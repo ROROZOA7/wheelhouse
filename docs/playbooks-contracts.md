@@ -58,7 +58,9 @@ skills:
     - id: tdd
       provenance: {repo: github.com/<owner>/<repo>, commit: <sha>, license: MIT, path: <path>}
   allow_global: [ponytail, ponytail-review]   # only fallback-backed names
-  aliases: {"mattpocock-skills:tdd": tdd, "ponytail:ponytail": ponytail}
+  aliases: {"mattpocock-skills:tdd": tdd, "ponytail:ponytail": ponytail,
+            "superpowers:verification-before-completion": verification-before-completion,
+            "mattpocock-skills:domain-modeling": domain-modeling}
   by_kind:                       # ordered list; FIRST matching row wins (lowercased labels)
     - {labels: [bug],                 required: [diagnosing-bugs, tdd]}
     - {labels: [feature],             required: [implement, tdd, codebase-design]}
@@ -70,7 +72,7 @@ skills:
   by_phase:
     build:
       required: [build-method, ponytail, verification-before-completion, code-review]
-      optional: [testing-strategy, resolving-merge-conflicts, domain-modeling]
+      optional: [testing-strategy, domain-modeling]   # resolving-merge-conflicts removed upstream (mattpocock/skills #1120)
       conditional:
         - {id: vitest, when: "file:vitest.config.*"}
         - {id: playwright-best-practices, when: "file:playwright.config.*"}
@@ -122,7 +124,7 @@ settings: {}                              # reserved for Phase B; non-empty is r
 - `plugin.json` `name` ≠ `name`
 - `requires` is unsupported
 
-**Licences:** mattpocock/skills is MIT; verification-before-completion (obra/superpowers) is MIT; testing-strategy (anthropics/knowledge-work-plugins) is **Apache-2.0**, so it needs the licence text plus a changes notice in NOTICES.md; pr-security-review is MIT © Anthropic.
+**Licences:** mattpocock/skills is MIT (including domain-modeling); vitest (antfu/skills) and playwright-best-practices (currents-dev) are MIT and vendored, so conditionals resolve offline; ponytail and ponytail-review are not vendored (source licence unconfirmed) and stay allow_global with fallbacks; verification-before-completion (obra/superpowers) is MIT; testing-strategy (anthropics/knowledge-work-plugins) is **Apache-2.0**, so it needs the licence text plus a changes notice in NOTICES.md; pr-security-review is MIT © Anthropic.
 
 **Pilot binding (wheelhouse):** `verify_commands` = `npm run check`, `npm run lint`, `npm run test:unit`.
 
