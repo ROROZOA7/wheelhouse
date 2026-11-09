@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { LOGBOOK_ROW as pages } from '$lib/nav';
+	import { currentHealth } from '$lib/client/live.svelte';
+	import { logbookRow } from '$lib/nav';
+
+	const pages = $derived(logbookRow(!!currentHealth()?.playbooks.available));
 </script>
 
 <nav class="-ml-2.5 no-scrollbar flex gap-1 overflow-x-auto" aria-label="Logbook">

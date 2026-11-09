@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { harbourHref, LOGBOOK_ROW, mainSections } from './nav';
+import { harbourHref, LOGBOOK_ROW, logbookRow, mainSections } from './nav';
 
 const on = (path: string, pages: { href: string; label: string }[] = []) =>
 	mainSections(path, pages)
@@ -36,9 +36,15 @@ describe('the main sections', () => {
 			'Headroom',
 			'Where time went',
 			'Decided for you',
+			'Playbooks',
 			'Plugins'
 		]);
 		expect(LOGBOOK_ROW.at(-1)!.href).toBe('/settings/plugins');
+	});
+
+	it('lists Playbooks in the Logbook only when Firstmate has them', () => {
+		expect(logbookRow(false).map((p) => p.href)).not.toContain('/playbooks');
+		expect(logbookRow(true).map((p) => p.href)).toContain('/playbooks');
 	});
 
 	it('marks a plugin page, not the Logbook', () => {

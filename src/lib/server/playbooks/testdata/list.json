@@ -1,0 +1,27 @@
+{
+	"schema": "fm-pack.v1",
+	"generated_at": "2026-11-08T12:00:00Z",
+	"fm_home": "/home/captain/crew",
+	"packs": [
+		{
+			"name": "core",
+			"version": "0.1.0",
+			"digest": "sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a",
+			"source": {
+				"repo": "github.com/ROROZOA7/firstmate",
+				"commit": "0123456789abcdef0123456789abcdef01234567",
+				"path": "core"
+			},
+			"installed_at": "2026-11-08T11:30:00Z",
+			"contents": { "skills": 9, "hooks": 0, "mcp": 0 },
+			"risk": [],
+			"update": null,
+			"bound_projects": [
+				{
+					"project": "wheelhouse",
+					"digest": "sha256:4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a"
+				}
+			]
+		}
+	]
+}

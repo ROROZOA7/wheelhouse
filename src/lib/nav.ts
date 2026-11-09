@@ -18,17 +18,24 @@ export interface Section {
 
 /**
  * The Logbook's own row: the session and headroom pages, Headroom first, then
- * Plugins, which opens Settings → Plugins (behind the header's gear).
+ * Playbooks (only when Firstmate has them; see logbookRow), then Plugins, which
+ * opens Settings → Plugins (behind the header's gear).
  */
 export const LOGBOOK_ROW = [
 	{ href: '/headroom', label: 'Headroom' },
 	{ href: '/time', label: 'Where time went' },
 	{ href: '/decisions', label: 'Decided for you' },
+	{ href: '/playbooks', label: 'Playbooks' },
 	{ href: '/settings/plugins', label: 'Plugins' }
 ];
 
+/** The Logbook's row, leaving out Playbooks when this Firstmate has none. */
+export function logbookRow(playbooks: boolean) {
+	return LOGBOOK_ROW.filter((p) => playbooks || p.href !== '/playbooks');
+}
+
 /** The Logbook's pages: the session and headroom pages. */
-const LOGBOOK = ['/headroom', '/time', '/decisions'];
+const LOGBOOK = ['/headroom', '/time', '/decisions', '/playbooks'];
 
 export function mainSections(
 	pathname: string,
