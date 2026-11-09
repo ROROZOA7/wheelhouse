@@ -85,10 +85,10 @@ export function stepGist(
 			const status = task.current?.detail ?? '';
 			const failed =
 				s.failed ||
-				(ev?.validation.available && task.pipeline?.outcome === 'failed') ||
+				task.pipeline?.outcome === 'failed' ||
 				(worker?.ok && worker.commands.some((c) => c.exit !== null && c.exit !== 0));
 			const passed =
-				(ev?.validation.available && task.pipeline?.outcome === 'passed') ||
+				task.pipeline?.outcome === 'passed' ||
 				(worker?.ok && worker.commands.length > 0 && worker.commands.every((c) => c.exit === 0));
 			// Prose is only a fallback; historical/negated failures cannot override current evidence.
 			const proseFailed =

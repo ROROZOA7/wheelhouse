@@ -118,6 +118,24 @@ describe('HowItWorkedPanel', () => {
 		expect(document.querySelector('[data-how-unavailable]')?.textContent).toMatch(/codex/);
 	});
 
+	it('refreshes successful results once per reopen without polling', async () => {
+		let value = how;
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify(value), { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+		const props = $state({ taskId: 'wh-7', shown: true });
+		app = mount(HowItWorkedPanel, { target: document.body, props });
+		await vi.waitFor(() => expect(document.querySelector('[data-how-summary]')).not.toBeNull());
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		props.shown = false;
+		flushSync();
+		value = { ...how, driftReasons: ['binding'] };
+		props.shown = true;
+		flushSync();
+		await vi.waitFor(() =>
+			expect(document.querySelector('[data-drift]')?.textContent).toContain('binding')
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
 	it('reads again after a failure, and shows what the retry finds', async () => {
 		let fail = true;
 		vi.stubGlobal(

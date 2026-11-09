@@ -171,6 +171,14 @@ describe('stages', () => {
 		).toBe('Checks passed');
 		const stale = { ...worker, ok: false, commands: [{ ...worker.commands[0], exit: 127 }] };
 		const passing = task({ pipeline: { outcome: 'passed' } as TaskSummary['pipeline'] });
+		expect(stepGist(validation, passing, ev({ worker: stale }))).toBe('Checks passed');
+		expect(
+			stepGist(
+				validation,
+				task({ pipeline: { outcome: 'failed' } as TaskSummary['pipeline'] }),
+				ev()
+			)
+		).toBe('Checks failed');
 		expect(
 			stepGist(validation, passing, ev({ worker: stale, validation: seen({ detail: 'passed' }) }))
 		).toBe('Checks passed');

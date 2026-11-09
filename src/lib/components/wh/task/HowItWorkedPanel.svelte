@@ -18,20 +18,24 @@
 	const how = $derived(data?.id === taskId ? data.value : null);
 
 	$effect(() => {
-		if (!shown || data?.id === taskId) return;
+		if (!shown) return;
+		let active = true;
 		const want = taskId;
 		// A new read starts clean: an earlier failure must not hide what this one finds.
 		failedFor = null;
 		fetch(`/api/tasks/${encodeURIComponent(want)}/how`)
 			.then(async (r) => (r.ok ? ((await r.json()) as HowItWorked) : Promise.reject(r.status)))
 			.then((v) => {
-				if (want !== taskId) return;
+				if (!active || want !== taskId) return;
 				data = { id: want, value: v };
 				failedFor = null;
 			})
 			.catch(() => {
-				if (want === taskId) failedFor = want;
+				if (active && want === taskId) failedFor = want;
 			});
+		return () => {
+			active = false;
+		};
 	});
 
 	const ICON: Record<WorkEventKind, Component> = {

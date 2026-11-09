@@ -62,7 +62,12 @@ describe('worker evidence shape', () => {
 		expect(r.decisions[1].open).toBe(false);
 	});
 	it('never throws for malformed arrays or null', () => {
-		for (const v of [null, [], { ...valid(), verify_commands: [null], decisions: [null] }])
+		for (const v of [
+			null,
+			[],
+			{ ...valid(), verify_commands: [null], decisions: [null] },
+			{ ...valid(), decisions: [{ rung: { toString: null }, choice: 'x', why: 'x' }] }
+		])
 			expect(checkWorkerEvidence(v, 'pilot').ok).toBe(false);
 	});
 });

@@ -16,6 +16,7 @@ async function setup() {
 	const data = path.join(root, 'data');
 	const dir = path.join(data, 'pilot');
 	await mkdir(dir, { recursive: true });
+	await writeFile(path.join(dir, 'pack.json'), JSON.stringify({ verify_commands: [] }));
 	return { root, data, dir };
 }
 const record = () => ({
@@ -27,6 +28,50 @@ const record = () => ({
 	decisions: []
 });
 describe('confined worker evidence reader', () => {
+	it('requires all frozen command IDs and exact commands in local fallback', async () => {
+		const { data, dir } = await setup();
+		await writeFile(
+			path.join(dir, 'pack.json'),
+			JSON.stringify({
+				verify_commands: [
+					{ id: 'a', cmd: 'check-a' },
+					{ id: 'b', cmd: 'check-b' }
+				]
+			})
+		);
+		for (const commands of [
+			[{ id: 'a', cmd: 'check-a', exit: 0 }],
+			[
+				{ id: 'a', cmd: 'wrong', exit: 0 },
+				{ id: 'b', cmd: 'check-b', exit: 0 }
+			]
+		]) {
+			await writeFile(
+				path.join(dir, 'evidence.json'),
+				JSON.stringify({ ...record(), verify_commands: commands })
+			);
+			expect((await readWorkerEvidence(data, 'pilot'))?.ok).toBe(false);
+		}
+		await writeFile(
+			path.join(dir, 'evidence.json'),
+			JSON.stringify({
+				...record(),
+				verify_commands: [
+					{ id: 'a', cmd: 'check-a', exit: 0 },
+					{ id: 'b', cmd: 'check-b', exit: 0 }
+				]
+			})
+		);
+		expect((await readWorkerEvidence(data, 'pilot'))?.ok).toBe(true);
+	});
+	it('falls back only for absent checker, not execution permission errors', async () => {
+		const { root, data, dir } = await setup();
+		await writeFile(path.join(dir, 'evidence.json'), JSON.stringify(record()));
+		expect((await readWorkerEvidence(data, 'pilot', path.join(root, 'absent')))?.ok).toBe(true);
+		const script = path.join(root, 'not-executable');
+		await writeFile(script, '#!/bin/sh\n');
+		expect((await readWorkerEvidence(data, 'pilot', script))?.ok).toBe(false);
+	});
 	it('rejects a FIFO promptly without waiting for a writer', async () => {
 		const { data, dir } = await setup();
 		const fifo = path.join(dir, 'evidence.json');

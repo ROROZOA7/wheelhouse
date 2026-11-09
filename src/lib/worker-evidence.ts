@@ -125,9 +125,8 @@ export function checkWorkerEvidence(value: unknown, task: string): WorkerEvidenc
 			}
 			const before = problems.length;
 			if (
-				!['intent', 'repo-precedent', 'smallest-blast-radius', 'human-gate'].includes(
-					String(v.rung)
-				)
+				typeof v.rung !== 'string' ||
+				!['intent', 'repo-precedent', 'smallest-blast-radius', 'human-gate'].includes(v.rung)
 			)
 				problem('rung-unknown', at + '.rung', `${at}.rung is unknown.`);
 			required(v, 'choice', at + '.');

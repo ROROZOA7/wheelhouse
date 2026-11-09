@@ -116,11 +116,59 @@ export async function readWorkerEvidence(
 			}
 		} else if (
 			!/unknown (?:command|subcommand)|unsupported.*command/i.test(r.stderr) &&
-			r.kind !== 'spawn-error'
+			!(r.kind === 'spawn-error' && /\bENOENT\b/.test(r.message))
 		) {
 			result.problems.push({
 				code: 'evidence-unreadable',
 				detail: 'Firstmate evidence checker failed.'
+			});
+		}
+		result.ok = result.ok && result.problems.length === 0;
+	}
+	if (result.source === 'local shape check') {
+		try {
+			const file = await realpath(path.join(root, 'pack.json'));
+			if (!inside(root, file)) throw new Error('unsafe pack');
+			const handle = await open(
+				file,
+				constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+			);
+			let pack: unknown;
+			try {
+				const st = await handle.stat();
+				if (!st.isFile() || st.size > MAX) throw new Error('invalid pack');
+				const bytes = Buffer.alloc(MAX + 1);
+				let n = 0;
+				while (n < bytes.length) {
+					const chunk = await handle.read(bytes, n, bytes.length - n, n);
+					if (!chunk.bytesRead) break;
+					n += chunk.bytesRead;
+				}
+				if (n > MAX) throw new Error('oversize pack');
+				pack = JSON.parse(bytes.subarray(0, n).toString('utf8'));
+			} finally {
+				await handle.close();
+			}
+			const required = (pack as { verify_commands?: unknown } | null)?.verify_commands;
+			if (
+				!Array.isArray(required) ||
+				!required.every((c) => c && typeof c.id === 'string' && typeof c.cmd === 'string')
+			)
+				throw new Error('invalid requirements');
+			for (const command of required) {
+				if (!result.commands.some((c) => c.id === command.id && c.cmd === command.cmd)) {
+					result.problems.push({
+						code: 'verify-missing',
+						path: 'verify_commands',
+						detail: `Missing frozen verify command: ${command.id}.`
+					});
+				}
+			}
+		} catch {
+			result.problems.push({
+				code: 'verify-missing',
+				path: 'pack.json.verify_commands',
+				detail: 'Frozen verification requirements could not be read; command coverage is unknown.'
 			});
 		}
 		result.ok = result.ok && result.problems.length === 0;
