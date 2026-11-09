@@ -20,10 +20,14 @@
 	$effect(() => {
 		if (!shown || data?.id === taskId) return;
 		const want = taskId;
+		// A new read starts clean: an earlier failure must not hide what this one finds.
+		failedFor = null;
 		fetch(`/api/tasks/${encodeURIComponent(want)}/how`)
 			.then(async (r) => (r.ok ? ((await r.json()) as HowItWorked) : Promise.reject(r.status)))
 			.then((v) => {
-				if (want === taskId) data = { id: want, value: v };
+				if (want !== taskId) return;
+				data = { id: want, value: v };
+				failedFor = null;
 			})
 			.catch(() => {
 				if (want === taskId) failedFor = want;

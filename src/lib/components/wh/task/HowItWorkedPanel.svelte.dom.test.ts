@@ -89,4 +89,27 @@ describe('HowItWorkedPanel', () => {
 		await render({ available: false, reason: 'Not available for codex workers yet.' });
 		expect(document.querySelector('[data-how-unavailable]')?.textContent).toMatch(/codex/);
 	});
+
+	it('reads again after a failure, and shows what the retry finds', async () => {
+		let fail = true;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				fail
+					? new Response('no', { status: 503 })
+					: new Response(JSON.stringify(how), { status: 200 })
+			)
+		);
+		const props = $state({ taskId: 'wh-7', shown: true });
+		app = mount(HowItWorkedPanel, { target: document.body, props });
+		await vi.waitFor(() => expect(document.body.textContent).toContain('Could not read'));
+		// Leave the tab and come back: it reads again, and this time it works.
+		fail = false;
+		props.shown = false;
+		flushSync();
+		props.shown = true;
+		flushSync();
+		await vi.waitFor(() => expect(document.querySelector('[data-how-summary]')).not.toBeNull());
+		expect(document.body.textContent).not.toContain('Could not read');
+	});
 });
