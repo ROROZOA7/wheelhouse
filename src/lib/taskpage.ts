@@ -81,7 +81,28 @@ export function stepGist(
 		} else if (id === 'report' && ev?.report.available) {
 			parts.push('Report written');
 		} else if (id === 'validation' && s.state === 'done') {
-			parts.push('Checks passed');
+			const worker = ev?.worker;
+			const status = task.current?.detail ?? '';
+			const failed =
+				s.failed ||
+				task.pipeline?.outcome === 'failed' ||
+				(worker?.ok && worker.commands.some((c) => c.exit !== null && c.exit !== 0));
+			const passed =
+				task.pipeline?.outcome === 'passed' ||
+				(worker?.ok && worker.commands.length > 0 && worker.commands.every((c) => c.exit === 0));
+			// Prose is only a fallback; historical/negated failures cannot override current evidence.
+			const proseFailed =
+				!failed &&
+				!passed &&
+				/\b(?:checks failed|verify cmds exit\s*[=:]?\s*[1-9]\d*)\b/i.test(status) &&
+				!/\b(?:no checks failed|fixed|previous|earlier)\b/i.test(status);
+			parts.push(
+				failed || proseFailed
+					? 'Checks failed'
+					: passed
+						? 'Checks passed'
+						: 'Checks done, outcome unknown'
+			);
 		}
 	}
 	return parts.length ? parts.join(' · ') : s.note;

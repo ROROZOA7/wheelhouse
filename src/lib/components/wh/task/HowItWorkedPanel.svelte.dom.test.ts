@@ -85,11 +85,57 @@ describe('HowItWorkedPanel', () => {
 		expect(items[1].textContent).toContain('exit 1');
 	});
 
+	it('separates Bash-created git changes from tool counts and shows drift reasons', async () => {
+		await render({
+			...how,
+			driftReasons: ['binding', 'origin'],
+			git: {
+				available: true,
+				source: 'git diff',
+				observedAt: null,
+				value: {
+					base: 'recorded base',
+					mergeBase: 'a',
+					branch: 'fm/pilot',
+					files: [],
+					total: 1,
+					truncated: false
+				}
+			}
+		});
+		expect(document.body.textContent?.replace(/\s+/g, ' ')).toContain('Changed in git: 1 file');
+		expect(document.body.textContent).toContain('Git changes differ from editing-tool counts');
+		expect(document.body.textContent).toContain('binding, origin');
+	});
+
+	it('shows known drift without a conformance record', async () => {
+		await render({ ...how, conformance: null, driftReasons: ['origin'] });
+		expect(document.querySelector('[data-drift]')?.textContent).toContain('origin');
+		expect(document.querySelector('[data-conformance]')).toBeNull();
+	});
 	it('says why when the session cannot be read', async () => {
 		await render({ available: false, reason: 'Not available for codex workers yet.' });
 		expect(document.querySelector('[data-how-unavailable]')?.textContent).toMatch(/codex/);
 	});
 
+	it('refreshes successful results once per reopen without polling', async () => {
+		let value = how;
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify(value), { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+		const props = $state({ taskId: 'wh-7', shown: true });
+		app = mount(HowItWorkedPanel, { target: document.body, props });
+		await vi.waitFor(() => expect(document.querySelector('[data-how-summary]')).not.toBeNull());
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		props.shown = false;
+		flushSync();
+		value = { ...how, driftReasons: ['binding'] };
+		props.shown = true;
+		flushSync();
+		await vi.waitFor(() =>
+			expect(document.querySelector('[data-drift]')?.textContent).toContain('binding')
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
 	it('reads again after a failure, and shows what the retry finds', async () => {
 		let fail = true;
 		vi.stubGlobal(

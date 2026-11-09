@@ -1,4 +1,6 @@
-import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, writeFile, unlink, open } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { constants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -69,6 +71,23 @@ const task = {
 };
 
 describe('HowItWorkedService', () => {
+	it('rejects FIFO pack records promptly', async () => {
+		const { home } = await setup();
+		const fifo = path.join(home, 'data', 'wh-7', 'pack.json');
+		await unlink(fifo);
+		execFileSync('mkfifo', [fifo]);
+		const rescue = setTimeout(async () => {
+			const h = await open(fifo, constants.O_RDWR | constants.O_NONBLOCK);
+			await h.close();
+		}, 500);
+		const started = Date.now();
+		try {
+			expect(await new HowItWorkedService([], home).base('wh-7')).toBeUndefined();
+			expect(Date.now() - started).toBeLessThan(400);
+		} finally {
+			clearTimeout(rescue);
+		}
+	});
 	it('reads a Claude worker’s session for this task only, and checks it against its pack', async () => {
 		const { projects, home } = await setup();
 		const svc = new HowItWorkedService([new ClaudeTranscripts(projects)], home);
@@ -127,6 +146,18 @@ describe('HowItWorkedService', () => {
 		expect(again).toEqual(a);
 	});
 
+	it('reads only bounded recorded origin commits as the task base', async () => {
+		const { home } = await setup();
+		const svc = new HowItWorkedService([], home);
+		const file = path.join(home, 'data', 'wh-7', 'pack.json');
+		await writeFile(file, JSON.stringify({ origin: { commit: 'a'.repeat(40) } }));
+		expect(await svc.base('wh-7')).toBe('a'.repeat(40));
+		await writeFile(file, JSON.stringify({ origin: { commit: '--help' } }));
+		expect(await svc.base('wh-7')).toBeUndefined();
+		await writeFile(file, ' '.repeat(256 * 1024 + 1));
+		expect(await svc.base('wh-7')).toBeUndefined();
+		expect(await svc.base('../wh-7')).toBeUndefined();
+	});
 	it('says plainly that other harnesses are not readable yet', async () => {
 		const { projects, home } = await setup();
 		const svc = new HowItWorkedService([new ClaudeTranscripts(projects)], home);

@@ -172,6 +172,8 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 	});
 	const evidence = new EvidenceReader({
 		dataDir: path.join(install.homeDir, 'data'),
+		packScript: path.join(install.firstmateDir, 'bin', 'fm-pack.sh'),
+		env: { ...env, FM_HOME: install.homeDir },
 		useGh: env.WHEELHOUSE_NO_GH !== '1',
 		evidenceDir: env.WHEELHOUSE_NM_EVIDENCE_DIR || undefined,
 		logsDir: env.WHEELHOUSE_NM_LOGS_DIR || undefined
@@ -1062,7 +1064,10 @@ export async function currentInbox(): Promise<InboxView> {
 }
 
 /** Firstmate's playbooks: the pack list for the catalog (no project), or one project's resolve; read-only. */
-export async function currentPlaybooks(project: string | null): Promise<PlaybooksView> {
+export async function currentPlaybooks(
+	project: string | null,
+	task?: string
+): Promise<PlaybooksView> {
 	const r = await getRuntime();
 	if (!r.configured) {
 		return {
@@ -1077,7 +1082,7 @@ export async function currentPlaybooks(project: string | null): Promise<Playbook
 		return { schema: 'wheelhouse-playbooks.v1', source, list: null, resolve: null };
 	// The catalog lists the packs; a project's tab needs only its own resolve.
 	const [list, resolve] = project
-		? [null, await r.playbooks.resolve(project)]
+		? [null, await r.playbooks.resolve(project, task)]
 		: [await r.playbooks.list(), null];
 	return { schema: 'wheelhouse-playbooks.v1', source, list, resolve };
 }

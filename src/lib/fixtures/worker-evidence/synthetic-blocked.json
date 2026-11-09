@@ -1,0 +1,14 @@
+{
+	"schema": "fm-evidence.v1",
+	"task": "example-blocked",
+	"branch": "fm/example-blocked",
+	"head": "1111111111111111111111111111111111111111",
+	"commands": [{ "cmd": "example-check", "status": "skipped" }],
+	"decisions": [
+		{
+			"rung": "human-gate",
+			"choice": "choose-example-scope",
+			"why": "UNRESOLVED: This synthetic example needs a scope choice before work begins."
+		}
+	]
+}

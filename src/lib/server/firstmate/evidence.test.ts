@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskSummary } from '../../types';
 import {
 	answeredRoundFromLog,
 	ciChecksFromLog,
@@ -32,6 +33,62 @@ beforeEach(() => {
 	mkdirSync(path.join(data, 't-1', 'screenshots'), { recursive: true });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+it('starts worker evidence while independent evidence is still pending', async () => {
+	const r = reader();
+	let release!: (v: Awaited<ReturnType<EvidenceReader['pr']>>) => void;
+	vi.spyOn(r, 'pr').mockReturnValue(
+		new Promise((resolve) => {
+			release = resolve;
+		})
+	);
+	vi.spyOn(r, 'report').mockResolvedValue({ available: false, reason: 'test' });
+	vi.spyOn(r, 'screenshots').mockResolvedValue([]);
+	const worker = vi.spyOn(r, 'worker').mockResolvedValue(null);
+	const pending = r.evidence({ id: 't-1', status: 'queued', current: null } as TaskSummary, null);
+	expect(worker).toHaveBeenCalledWith('t-1');
+	release({ available: false, reason: 'test' });
+	await pending;
+});
+
+describe('archived worker evidence freshness', () => {
+	it.each(['matching', 'different', 'unknown', 'duplicate'] as const)(
+		'%s recorded done head without a worktree',
+		async (mode) => {
+			const head = 'a'.repeat(40);
+			writeFileSync(
+				path.join(data, 't-1', 'pack.json'),
+				JSON.stringify({ verify_commands: [{ id: 'test', cmd: 'example-test' }] })
+			);
+			writeFileSync(
+				path.join(data, 't-1', 'evidence.json'),
+				JSON.stringify({
+					schema: 'fm-evidence.v1',
+					task: 't-1',
+					pack: 'example',
+					head_sha: head,
+					verify_commands: [{ id: 'test', cmd: 'example-test', exit: 0 }],
+					decisions: []
+				})
+			);
+			mkdirSync(path.join(dir, 'state'));
+			if (mode !== 'unknown')
+				writeFileSync(
+					path.join(dir, 'state', 't-1.meta'),
+					`local_done_head=${mode === 'different' ? 'b'.repeat(40) : head}\n${mode === 'duplicate' ? `local_done_head=${head}\n` : ''}`
+				);
+			const result = await reader().evidence(
+				{ id: 't-1', status: 'done', current: null } as TaskSummary,
+				null
+			);
+			expect(result.worker?.ok).toBe(mode === 'matching');
+			if (mode !== 'matching')
+				expect(result.worker?.problems).toContainEqual(
+					expect.objectContaining({ code: 'head-mismatch' })
+				);
+		}
+	);
+});
 
 describe('screenshots', () => {
 	it('lists the worker’s images first, then no-mistakes run evidence', async () => {

@@ -643,6 +643,8 @@ export interface Check {
 }
 
 export interface TaskEvidence {
+	/** Bounded, validated worker record; absent on older Firstmate tasks. */
+	worker?: import('./worker-evidence').WorkerEvidence | null;
 	files: Available<{
 		base: string;
 		/** The commit the diff is taken against (merge base of HEAD and base). */

@@ -58,6 +58,8 @@ export type HowItWorked =
 			/** Events left out of the timeline (it keeps the latest MAX_EVENTS). */
 			dropped: number;
 			summary: WorkSummary;
+			git?: import('./types').TaskEvidence['files'];
+			driftReasons?: string[];
 			conformance: Conformance | null;
 	  }
 	| { available: false; reason: string };

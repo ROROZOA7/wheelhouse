@@ -2,6 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../firstmate/exec';
+import { TASK_ID } from '../firstmate/adapter';
 import type {
 	PackList,
 	PackListEntry,
@@ -162,15 +163,16 @@ export class PlaybookReader {
 		});
 	}
 
-	async resolve(project: string): Promise<Read<PackResolve>> {
+	async resolve(project: string, task?: string): Promise<Read<PackResolve>> {
 		if (!PROJECT.test(project)) return { ok: false, reason: 'Not a project id.' };
-		return this.cached(`resolve ${project}`, async () => {
+		if (task !== undefined && !TASK_ID.test(task)) return { ok: false, reason: 'Not a task id.' };
+		return this.cached(`resolve ${project} ${task ?? ''}`, async () => {
 			const src = await this.source();
 			if (!src.available) return { ok: false, reason: src.reason };
 			const r =
 				src.source === 'fixture'
 					? await this.fixture(`resolve-${project}.json`, unbound(project))
-					: await this.run(['resolve', project, '--json']);
+					: await this.run(['resolve', project, ...(task ? ['--task', task] : []), '--json']);
 			return r.ok && isSchema(r.value) && Array.isArray(r.value.skills)
 				? { ok: true, value: withDefaults(r.value as unknown as PackResolve) }
 				: { ok: false, reason: r.ok ? 'fm-pack.sh resolve gave an unexpected answer.' : r.reason };
