@@ -17,6 +17,7 @@
 	import { runAt } from '$lib/changes';
 	import { tone, textClass } from '$lib/components/wh/tone';
 	import { hasDetail, openByDefault, prState, stepGist, type TaskShot } from '$lib/taskpage';
+	import type { PullRequestLink } from '$lib/plugins/pullrequests';
 	import type { Snippet } from 'svelte';
 	import type { Check, PassageCheck, PassageStep, TaskDetail, TaskSummary } from '$lib/types';
 	import {
@@ -48,7 +49,7 @@
 		pluginEntries: SlotEntry[];
 		/** Plugin task.section entries placed right after a passage step, by step key. */
 		afterStep: Record<string, SlotEntry[]>;
-		prLink: { href: string; external: boolean } | null;
+		prLink: PullRequestLink | null;
 		/** Enlarge the screenshot with this url. */
 		onshot: (url: string) => void;
 		/** Open one changed file's diff. */
@@ -61,7 +62,9 @@
 	const ev = $derived(detail.evidence);
 	const t = $derived(tone(task));
 	const FILES_PREVIEW = 12;
-	let showAllFiles = $state(false);
+	// Per task: the panel is reused when moving to another task.
+	let allFilesFor = $state<string | null>(null);
+	const showAllFiles = $derived(allFilesFor === id);
 
 	// On a later run, the stages show only the screenshots saved in it (earlier runs keep theirs).
 	const runShots = $derived(
@@ -117,10 +120,12 @@
 	function setAll(open: boolean) {
 		for (const s of task.passage.steps) if (hasDetail(s)) toggled[`${id} ${s.key}`] = open;
 	}
+	const runs = $derived(task.runs && task.runs.runs.length > 1 ? task.runs : null);
+	const run = $derived(runs?.runs.find((r) => r.n === shownRun) ?? null);
 </script>
 
 {#snippet filesBlock()}
-	{#if ev?.files.available}
+	{#if ev.files.available}
 		{@const f = ev.files.value}
 		{@const max = Math.max(1, ...f.files.map((x) => (x.additions ?? 0) + (x.deletions ?? 0)))}
 		<h4 class="mb-2 text-sm font-medium">
@@ -161,7 +166,7 @@
 			{#if !showAllFiles && f.files.length > FILES_PREVIEW}
 				<button
 					class="mt-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
-					onclick={() => (showAllFiles = true)}
+					onclick={() => (allFilesFor = id)}
 				>
 					Show all {f.files.length} files
 				</button>
@@ -174,7 +179,7 @@
 			<p class="text-sm text-muted-foreground">No changes yet.</p>
 		{/if}
 		{@render source(ev.files)}
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.files)}
 	{/if}
 {/snippet}
@@ -186,12 +191,10 @@
 {/snippet}
 
 {#snippet queueBlock()}
-	{#if task}
-		<p class="text-sm text-muted-foreground">
-			{task.since ? `Filed ${task.since}.` : 'Queued by Firstmate.'}
-			{#if task.blockedBy.length}Waiting on {task.blockedBy.join(', ')}.{/if}
-		</p>
-	{/if}
+	<p class="text-sm text-muted-foreground">
+		{task.since ? `Filed ${task.since}.` : 'Queued by Firstmate.'}
+		{#if task.blockedBy.length}Waiting on {task.blockedBy.join(', ')}.{/if}
+	</p>
 {/snippet}
 
 {#snippet progressBlock()}
@@ -199,13 +202,13 @@
 {/snippet}
 
 {#snippet validationBlock()}
-	{#if task && showsChecks(task)}
+	{#if showsChecks(task)}
 		<ChecksTimeline
 			pipeline={task.pipeline}
 			busy={task.busy}
-			prChecks={ev?.pr.available ? ev.pr.value.checks : []}
+			prChecks={ev.pr.available ? ev.pr.value.checks : []}
 		/>
-		{#if ev?.validation.available}
+		{#if ev.validation.available}
 			<RawDetails
 				raw={ev.validation.value.detail}
 				plain={plainStatus(task.current?.state, ev.validation.value.detail)}
@@ -217,10 +220,10 @@
 				: ''}.
 		</p>
 		{@render checksLink()}
-	{:else if ev?.validation.available}
-		{@const plain = plainStatus(task?.current?.state, ev.validation.value.detail)}
+	{:else if ev.validation.available}
+		{@const plain = plainStatus(task.current?.state, ev.validation.value.detail)}
 		<p class="text-sm">{plain}</p>
-		{#if task?.pipeline && task.current?.state === 'working'}
+		{#if task.pipeline && task.current?.state === 'working'}
 			<p class="mt-1 text-sm text-muted-foreground">
 				{task.pipeline.label} step{task.pipeline.round
 					? `, fix round ${task.pipeline.round}`
@@ -231,7 +234,7 @@
 		{/if}
 		<RawDetails raw={ev.validation.value.detail} {plain} />
 		{@render source(ev.validation)}
-	{:else if detail?.build.checks.available}
+	{:else if detail.build.checks.available}
 		<!-- No run is current any more, but the latest one's report is still there. -->
 		<ul class="space-y-1 text-sm">
 			{#each detail.build.checks.value.steps.filter((x) => x.key !== 'intent') as c (c.key)}
@@ -239,7 +242,7 @@
 			{/each}
 		</ul>
 		{@render checksLink()}
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.validation)}
 	{/if}
 {/snippet}
@@ -256,7 +259,7 @@
 {/snippet}
 
 {#snippet prBlock()}
-	{#if ev?.pr.available}
+	{#if ev.pr.available}
 		{@const pr = ev.pr.value}
 		<p class="text-sm">
 			<a
@@ -288,7 +291,7 @@
 		{/if}
 		{@render source(ev.pr)}
 		{@render reviewTab()}
-	{:else if ev && !ev.pr.available && task?.pr}
+	{:else if !ev.pr.available && task.pr}
 		<a
 			href={task.pr.url}
 			target="_blank"
@@ -302,13 +305,13 @@
 		<p class="mt-1 text-sm text-muted-foreground">
 			Its state and checks are not available. {ev.pr.reason}
 		</p>
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.pr)}
 	{/if}
 {/snippet}
 
 {#snippet reportBlock()}
-	{#if ev?.report.available}
+	{#if ev.report.available}
 		<div class="flex gap-3 rounded-lg border p-3">
 			<FileText class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 			<div class="min-w-0">
@@ -321,13 +324,13 @@
 			</div>
 		</div>
 		{@render source(ev.report)}
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.report)}
 	{/if}
 {/snippet}
 
 {#snippet screenshotsBlock()}
-	{#if ev?.screenshots.available && (runShots.length || !shots.length)}
+	{#if ev.screenshots.available && (runShots.length || !shots.length)}
 		<div class="flex flex-wrap gap-3">
 			{#each runShots as s (s.url)}
 				<button
@@ -347,22 +350,22 @@
 			{/each}
 		</div>
 		{@render source(ev.screenshots)}
-	{:else if ev?.screenshots.available}
+	{:else if ev.screenshots.available}
 		<p class="text-sm text-muted-foreground">
 			No screenshots were saved in this run yet; earlier runs keep theirs.
 		</p>
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.screenshots)}
 	{/if}
 {/snippet}
 
 {#snippet previewBlock()}
-	{#if ev?.preview.available && task?.preview?.url === ev.preview.value.url && previewChecks.stopped(task.id)}
+	{#if ev.preview.available && task.preview?.url === ev.preview.value.url && previewChecks.stopped(task.id)}
 		<p class="text-sm text-muted-foreground" data-preview-stopped>
 			Preview stopped. {previewChecks.checks[task.id]?.reason ?? ''}
 		</p>
 		{@render source(ev.preview)}
-	{:else if ev?.preview.available}
+	{:else if ev.preview.available}
 		<a
 			href={ev.preview.value.url}
 			target="_blank"
@@ -371,13 +374,13 @@
 			>Open preview<ExternalLink class="size-3.5" aria-hidden="true" /></a
 		>
 		{@render source(ev.preview)}
-	{:else if ev}
+	{:else}
 		{@render unavailable(ev.preview)}
 	{/if}
 {/snippet}
 
 {#snippet decisionBlock(s: PassageStep)}
-	{#if s.state === 'current' && ev?.decisions.length}
+	{#if s.state === 'current' && ev.decisions.length}
 		<ul class="list-disc space-y-1 pl-5 text-sm">
 			{#each ev.decisions as d, i (i)}
 				{@const plain = plainStatus('needs-decision', d.text)}
@@ -388,7 +391,7 @@
 {/snippet}
 
 {#snippet checkBlock(_s: PassageStep, block: string)}
-	{@const c = task?.passage.checks.find((x) => `check:${x.id}` === block)}
+	{@const c = task.passage.checks.find((x) => `check:${x.id}` === block)}
 	{#if c}
 		<div class="flex items-start gap-3 rounded-lg border px-3 py-2 text-sm" data-check={c.id}>
 			{@render checkIcon({ name: c.label, state: checkTone(c) })}
@@ -428,44 +431,12 @@
 {/snippet}
 
 {#snippet landedBlock()}
-	{#if task}
-		<p class="text-sm text-muted-foreground">
-			{#if task.mergedAt}Merged {ago(task.mergedAt, live.now)} ({clock(task.mergedAt)}).
-			{:else if task.completedOn}Closed on {task.completedOn}; the exact time was not recorded.
-			{:else if task.status === 'landed'}Done.
-			{/if}
-		</p>
-	{/if}
-{/snippet}
-
-{#snippet stagesPanel(task: TaskSummary)}
-	{@const runs = task.runs && task.runs.runs.length > 1 ? task.runs : null}
-	{@const run = runs?.runs.find((r) => r.n === shownRun) ?? null}
-	{#if runs}
-		<div class="mb-6">
-			<RunSwitcher
-				{runs}
-				selected={shownRun}
-				onselect={(n) => (pickedRun = { task: task.id, n })}
-			/>
-		</div>
-	{/if}
-	{#if runs && run && run.n !== runs.current}
-		<PastRun
-			{run}
-			{runs}
-			steps={task.passage.steps}
-			validations={(detail?.validations ?? []).filter((v) => runAt(runs, v.startedAt) === run.n)}
-			shots={shots.filter((s) => runAt(runs, s.modifiedAt) === run.n)}
-			{onshot}
-		/>
-	{:else}
-		{#if run && run.n > 1}
-			<!-- The changes that started this run, at its top. -->
-			<div class="mb-6"><ChangeRequests {run} /></div>
+	<p class="text-sm text-muted-foreground">
+		{#if task.mergedAt}Merged {ago(task.mergedAt, live.now)} ({clock(task.mergedAt)}).
+		{:else if task.completedOn}Closed on {task.completedOn}; the exact time was not recorded.
+		{:else if task.status === 'landed'}Done.
 		{/if}
-		{@render currentStages(task)}
-	{/if}
+	</p>
 {/snippet}
 
 {#snippet currentStages(task: TaskSummary)}
@@ -601,4 +572,24 @@
 	</section>
 {/snippet}
 
-{@render stagesPanel(task)}
+{#if runs}
+	<div class="mb-6">
+		<RunSwitcher {runs} selected={shownRun} onselect={(n) => (pickedRun = { task: task.id, n })} />
+	</div>
+{/if}
+{#if runs && run && run.n !== runs.current}
+	<PastRun
+		{run}
+		{runs}
+		steps={task.passage.steps}
+		validations={(detail.validations ?? []).filter((v) => runAt(runs, v.startedAt) === run.n)}
+		shots={shots.filter((s) => runAt(runs, s.modifiedAt) === run.n)}
+		{onshot}
+	/>
+{:else}
+	{#if run && run.n > 1}
+		<!-- The changes that started this run, at its top. -->
+		<div class="mb-6"><ChangeRequests {run} /></div>
+	{/if}
+	{@render currentStages(task)}
+{/if}

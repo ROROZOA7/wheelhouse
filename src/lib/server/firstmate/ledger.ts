@@ -51,6 +51,11 @@ const MAX_READ_BYTES = 2 * 1024 * 1024;
 const PREVIEW = /^\s*preview:?\s+(https?:\/\/\S+)/i;
 const NM_KEY = /^nm-([0-9A-Z]{26})-/;
 
+const exists = (p: string) =>
+	stat(p).then(
+		() => true,
+		() => false
+	);
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 
 export class LedgerReader {
@@ -63,17 +68,28 @@ export class LedgerReader {
 	/** Task ids touched by the most recent poll. */
 	changed = new Set<string>();
 
-	constructor(private file: string) {}
+	/**
+	 * `flag` is Firstmate's opt-in switch (config/fleet-ledger); when given, a missing
+	 * ledger file is told apart as "off" (no flag) or "on, nothing recorded yet".
+	 */
+	constructor(
+		private file: string,
+		private flag: string | null = null
+	) {}
 
 	state(): LedgerState {
 		return {
 			available: this.present,
-			reason: this.present
-				? null
-				: (this.problem ??
-					'Firstmate’s fleet activity ledger is off, so history after cleanup is not kept.'),
+			reason: this.present ? null : (this.problem ?? this.absentReason),
 			tasks: this.tasks
 		};
+	}
+
+	private flagOn = false;
+	private get absentReason() {
+		return this.flagOn
+			? 'Firstmate’s fleet activity ledger is on but has recorded nothing yet.'
+			: 'Firstmate’s fleet activity ledger is off, so history after cleanup is not kept. Turn it on by creating config/fleet-ledger in the Firstmate home.';
 	}
 
 	task(id: string): LedgerTask | null {
@@ -89,6 +105,7 @@ export class LedgerReader {
 		} catch {
 			this.present = false;
 			this.problem = null;
+			this.flagOn = this.flag !== null && (await exists(this.flag));
 			return 0;
 		}
 		this.present = true;

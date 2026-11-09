@@ -2,11 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TaskDetail, TaskSummary } from '$lib/types';
 
-const health = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock('$lib/client/live.svelte', () => ({
-	currentHealth: () => health.value,
-	live: { now: Date.now() }
-}));
+vi.mock('$lib/client/live.svelte', () => ({ live: { now: Date.now() } }));
 // The output inspector samples the worker's terminal; not under test here.
 vi.mock('$lib/components/wh/OutputInspector.svelte', async () => ({
 	default: (await import('./testdata/Empty.svelte')).default
@@ -22,37 +18,30 @@ afterEach(() => {
 });
 
 const task = { id: 'wh-1' } as TaskSummary;
-const detail = (timeline: TaskDetail['timeline']) =>
-	({ timeline, gaps: [] }) as unknown as TaskDetail;
-const off = { available: false, reason: 'The ledger is off.' } as const;
 
-function render(ledgerAvailable: boolean, timeline: TaskDetail['timeline']) {
-	health.value = { ledger: { available: ledgerAvailable, reason: null } };
+function render(timeline: TaskDetail['timeline']) {
 	app = mount(LogPanel, {
 		target: document.body,
-		props: { task, detail: detail(timeline), sampling: false }
+		props: { task, detail: { timeline, gaps: [] } as unknown as TaskDetail, sampling: false }
 	});
 	flushSync();
-	return document.querySelector('[data-history-off]');
+	return document.body.textContent ?? '';
 }
 
-describe('LogPanel history notice', () => {
-	it('says how to turn history on when the fleet ledger is off', () => {
-		expect(render(false, off)?.textContent).toMatch(/History is off.*config\/fleet-ledger/s);
-	});
-
-	it('says nothing more when the ledger is on but has no history for the task', () => {
-		expect(render(true, { available: false, reason: 'No history for this task.' })).toBeNull();
+describe('LogPanel', () => {
+	it('shows the reason there is no history, once (the server says how to turn it on)', () => {
+		const reason = 'The ledger is off. Turn it on by creating config/fleet-ledger.';
+		const text = render({ available: false, reason });
+		expect(text.split('config/fleet-ledger').length - 1).toBe(1);
 	});
 
 	it('shows the history when there is some', () => {
-		const el = render(false, {
+		const text = render({
 			available: true,
 			source: 'the ledger',
 			observedAt: null,
 			value: [{ at: '2026-11-08T10:00:00Z', kind: 'cleaned-up', state: null, text: 'Cleaned up' }]
 		});
-		expect(el).toBeNull();
-		expect(document.body.textContent).toContain('Cleaned up');
+		expect(text).toContain('Cleaned up');
 	});
 });

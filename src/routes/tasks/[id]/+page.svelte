@@ -207,15 +207,7 @@
 							><ArrowLeft class="size-4" aria-hidden="true" />Harbour</a
 						>
 					</div>
-					<TaskOverview
-						{task}
-						{ev}
-						{detail}
-						{shots}
-						{prLink}
-						onreveal={reveal}
-						ontime={revealTime}
-					/>
+					<TaskOverview {task} {detail} {shots} {prLink} onreveal={reveal} ontime={revealTime} />
 					{#if consoleInImage(task)}
 						<!-- What the worker's terminal shows right now, sampled while on screen. -->
 						<section class="mt-6 border-t pt-5" aria-labelledby="live-terminal" data-terminal>
@@ -320,7 +312,7 @@
 							/>
 						{:else if tab.id === 'screenshots'}<ScreenshotsPanel
 								{shots}
-								{ev}
+								screenshots={detail.evidence.screenshots}
 								onshot={(i) => (shotIndex = i)}
 							/>
 						{:else if tab.id === 'log'}<LogPanel {task} {detail} sampling={active === 'log'} />

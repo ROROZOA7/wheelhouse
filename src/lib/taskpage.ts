@@ -85,7 +85,7 @@ export function stepGist(
 }
 
 /** A screenshot the worker saved for a task. */
-export type TaskShot = { name: string; url: string; modifiedAt: string };
+export type TaskShot = Extract<TaskEvidence['screenshots'], { available: true }>['value'][number];
 
 /** A pull request's state in plain words. */
 export const prState = (s: string | null, draft: boolean | null) =>
