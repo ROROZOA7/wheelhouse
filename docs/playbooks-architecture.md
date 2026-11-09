@@ -109,7 +109,7 @@ Injected into every brief:
 - The worker is unattended and never addresses the captain. AskUserQuestion is banned (by brief text in Phase A, by `disallowedTools` in Phase B).
 - Decision ladder: **Captain's intent / AC → repo precedent → smallest blast radius → human gate**. It never overrides the brief's Captain's intent.
 - A human gate is reported as `needs-decision: [key=human-gate-<topic>] <reason>`, Firstmate's existing protocol. Each decision gets its own key, so open decisions don't collide.
-- Decisions are recorded in `evidence.json` `decisions[]` (authoritative, since squash merges drop per-commit trailers). Optionally they also go in a commit trailer `Decision: <rung>: <choice> — <why>`, never a co-author line. The merge gate copies `decisions[]` into the squash body.
+- Decisions are recorded in `evidence.json` `decisions[]` (authoritative, since squash merges drop per-commit trailers). Optionally they also go in a commit trailer `Decision: <rung>: <choice> — <why>`, never a co-author line. The merge gate copies only **settled** `decisions[]` entries into the squash body. Open human-gate entries (`why: "UNRESOLVED: …"`) are listed separately as open, or left out; they are never presented as settled.
 - TDD, simplest solution first.
 - Docs first: **cite** the official doc URL used for third-party, auth or billing code.
 - Keep each PR small, as super-build states the rule.

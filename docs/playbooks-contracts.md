@@ -29,6 +29,7 @@ Design: [playbooks-architecture.md](playbooks-architecture.md).
   - `mode` is **normalised**: `755` if any execute bit is set, else `644`. Git stores only these two, so the digest doesn't depend on the checkout's umask.
   - `relpath` uses `/` separators.
   - Regular files only, `nlink == 1`. Symlinks, hardlinks or other file types are refused.
+  - Names containing `\n`, `\r` or `\` are refused, and so are names that aren't valid UTF-8. Walk errors refuse (`tree-unreadable`). Each file is opened with `O_NOFOLLOW` and fstat'd, and dev/inode/size must match lstat (`tree-changed`).
   - At most 4096 entries / 64 MiB (the same as extension-bindings).
   - The "not group/world-writable" rule applies to the **installed** copy: `install` chmods every file to 644/755 when it copies into `data/.packs`. It does not apply to the source checkout.
   - Reference value: pilot pack `core` at `packs`-branch commit 8cfc8c4 → `sha256:e600e53e960d4845633b01b090555e2e57fa9262f1a2b5f53da6ee32b34cf195` (118 files).
@@ -227,12 +228,14 @@ Definition of done adds: run every verify command at your final head and record 
 {"schema":"fm-evidence.v1","task":"<id>","pack":"core@0.1.0#sha256:…","head_sha":"…","base_sha":"…",
  "verify_commands":[{"id":"unit","cmd":"npm run test:unit","exit":0,"skipped_reason":null,
                      "head_sha":"…","base_sha":"…","log_path":"<abs under data/<task>/>"}],
- "decisions":[{"rung":"repo-precedent","choice":"…","why":"…"}],
+ "decisions":[{"rung":"repo-precedent","choice":"…","why":"…"},
+              {"rung":"human-gate","choice":"human-gate-<topic>","why":"UNRESOLVED: <open question>"}],
  "skills_used":["core:tdd"],"screenshots":[],"review_findings":[]}
 ```
 - The top-level `head_sha` must equal the `done:` head.
 - For a command that couldn't run, use `exit:null` plus a `skipped_reason`. Never a fake 0.
 - `skills_used` is a claim and is never trusted.
+- `rung` ∈ `intent|repo-precedent|smallest-blast-radius|human-gate`. Every rung's decision is recorded. An open human gate has `choice` = the gate key and `why` starting `UNRESOLVED:`. When it is answered, the worker adds a settled entry and does not edit the open one. Consumers never present open entries as settled.
 
 ## 6. fm-ready.v1 (later)
 `fm-ready.sh [--project <p>] --json` →
