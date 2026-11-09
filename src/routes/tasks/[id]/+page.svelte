@@ -1,4 +1,5 @@
 <script lang="ts">
+	import WorkerEvidence from '$lib/components/wh/task/WorkerEvidence.svelte';
 	import { page } from '$app/state';
 	import ResizableRail from '$lib/components/wh/ResizableRail.svelte';
 	import { replaceState } from '$app/navigation';
@@ -323,10 +324,9 @@
 								talk={detail.build.conversation}
 								now={live.now}
 							/>
-						{:else if tab.id === 'checks'}<ChecksReport
-								checks={detail.build.checks}
-								taskId={task.id}
-							/>
+						{:else if tab.id === 'checks'}<WorkerEvidence
+								value={detail.evidence.worker}
+							/><ChecksReport checks={detail.build.checks} taskId={task.id} />
 						{:else if tab.id === 'how'}<HowItWorkedPanel
 								taskId={task.id}
 								shown={active === 'how'}

@@ -1,0 +1,9 @@
+{
+	"schema": "fm-evidence.v1",
+	"task": "example-command-failure",
+	"branch": "fm/example-command-failure",
+	"base_head": "2222222222222222222222222222222222222222",
+	"final_head": "3333333333333333333333333333333333333333",
+	"verify": [{ "command": "example-missing-command", "exit_code": 127 }],
+	"decisions": []
+}

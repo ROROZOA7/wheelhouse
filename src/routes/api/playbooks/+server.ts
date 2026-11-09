@@ -5,6 +5,12 @@ import type { RequestHandler } from './$types';
 // Firstmate's playbook catalog (fm-pack.sh list), read-only; ?project= gives that project's
 // resolved playbook (fm-pack.sh resolve) instead.
 export const GET: RequestHandler = async ({ url }) =>
-	json(await currentPlaybooks(url.searchParams.get('project')), {
-		headers: { 'cache-control': 'no-store' }
-	});
+	json(
+		await currentPlaybooks(
+			url.searchParams.get('project'),
+			url.searchParams.get('task') ?? undefined
+		),
+		{
+			headers: { 'cache-control': 'no-store' }
+		}
+	);

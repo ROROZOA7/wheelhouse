@@ -127,6 +127,18 @@ describe('HowItWorkedService', () => {
 		expect(again).toEqual(a);
 	});
 
+	it('reads only bounded recorded origin commits as the task base', async () => {
+		const { home } = await setup();
+		const svc = new HowItWorkedService([], home);
+		const file = path.join(home, 'data', 'wh-7', 'pack.json');
+		await writeFile(file, JSON.stringify({ origin: { commit: 'a'.repeat(40) } }));
+		expect(await svc.base('wh-7')).toBe('a'.repeat(40));
+		await writeFile(file, JSON.stringify({ origin: { commit: '--help' } }));
+		expect(await svc.base('wh-7')).toBeUndefined();
+		await writeFile(file, ' '.repeat(256 * 1024 + 1));
+		expect(await svc.base('wh-7')).toBeUndefined();
+		expect(await svc.base('../wh-7')).toBeUndefined();
+	});
 	it('says plainly that other harnesses are not readable yet', async () => {
 		const { projects, home } = await setup();
 		const svc = new HowItWorkedService([new ClaudeTranscripts(projects)], home);

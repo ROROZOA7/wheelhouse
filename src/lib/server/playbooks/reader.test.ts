@@ -68,6 +68,24 @@ esac`);
 		expect(await r.resolve('-x')).toEqual({ ok: false, reason: 'Not a project id.' });
 	});
 
+	it('passes a validated task to resolve and preserves drift reasons', async () => {
+		const dir = await firstmate(`case "$1" in
+version) echo '{"schema":"fm-pack.v1","phase":"A"}' ;;
+resolve) printf '%s\\n' "$*" > "$FM_HOME/args"; echo '{"schema":"fm-pack.v1","skills":[],"drift_reasons":["pack","binding","origin"]}' ;;
+esac`);
+		const r = reader(dir);
+		expect(await r.resolve('wheelhouse', '--help')).toEqual({
+			ok: false,
+			reason: 'Not a task id.'
+		});
+		const result = await r.resolve('wheelhouse', 'pilot');
+		expect(
+			result.ok && (result.value as unknown as { drift_reasons: string[] }).drift_reasons
+		).toEqual(['pack', 'binding', 'origin']);
+		expect((await readFile(path.join(dir, 'args'), 'utf8')).trim()).toBe(
+			'resolve wheelhouse --task pilot --json'
+		);
+	});
 	it('runs fm-pack.sh once for callers at the same time', async () => {
 		const dir = await firstmate(`echo x >> "$FM_HOME/calls"
 case "$1" in

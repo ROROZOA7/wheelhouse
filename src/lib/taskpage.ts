@@ -81,7 +81,19 @@ export function stepGist(
 		} else if (id === 'report' && ev?.report.available) {
 			parts.push('Report written');
 		} else if (id === 'validation' && s.state === 'done') {
-			parts.push('Checks passed');
+			const worker = ev?.worker;
+			const status = task.current?.detail ?? '';
+			const failed =
+				s.failed ||
+				task.pipeline?.outcome === 'failed' ||
+				worker?.commands.some((c) => c.exit !== null && c.exit !== 0) ||
+				/\b(?:failed|exit\s*[=:]?\s*[1-9]\d*)\b/i.test(status);
+			const passed =
+				(ev?.validation.available && task.pipeline?.outcome === 'passed') ||
+				(worker?.ok && worker.commands.length > 0 && worker.commands.every((c) => c.exit === 0));
+			parts.push(
+				failed ? 'Checks failed' : passed ? 'Checks passed' : 'Checks done, outcome unknown'
+			);
 		}
 	}
 	return parts.length ? parts.join(' · ') : s.note;

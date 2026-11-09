@@ -85,6 +85,29 @@ describe('HowItWorkedPanel', () => {
 		expect(items[1].textContent).toContain('exit 1');
 	});
 
+	it('separates Bash-created git changes from tool counts and shows drift reasons', async () => {
+		await render({
+			...how,
+			driftReasons: ['binding', 'origin'],
+			git: {
+				available: true,
+				source: 'git diff',
+				observedAt: null,
+				value: {
+					base: 'recorded base',
+					mergeBase: 'a',
+					branch: 'fm/pilot',
+					files: [],
+					total: 1,
+					truncated: false
+				}
+			}
+		});
+		expect(document.body.textContent?.replace(/\s+/g, ' ')).toContain('Changed in git: 1 file');
+		expect(document.body.textContent).toContain('Git changes differ from editing-tool counts');
+		expect(document.body.textContent).toContain('binding, origin');
+	});
+
 	it('says why when the session cannot be read', async () => {
 		await render({ available: false, reason: 'Not available for codex workers yet.' });
 		expect(document.querySelector('[data-how-unavailable]')?.textContent).toMatch(/codex/);

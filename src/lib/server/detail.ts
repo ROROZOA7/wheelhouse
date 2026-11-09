@@ -181,16 +181,30 @@ export async function taskHowItWorked(
 	const ledger = runtime.collector.ledgerTask(task.id);
 	// The task's window: from its dispatch until it was merged or cleaned up (open while live).
 	const end = ledger?.merged?.ts ?? ledger?.cleanedUpAt ?? null;
+	const worktree =
+		runtime.collector.worktreeOf(task.id) ?? (await metaWorktree(runtime.install.homeDir, task.id));
 	const value = await runtime.howItWorked.read({
 		id: task.id,
 		harness: task.worker?.harness ?? ledger?.dispatched?.harness ?? null,
 		// Live from the snapshot, else the last one seen, else Firstmate's task record (state/<id>.meta).
-		worktree:
-			runtime.collector.worktreeOf(task.id) ??
-			(await metaWorktree(runtime.install.homeDir, task.id)),
+		worktree,
 		branch: task.branch ?? `fm/${task.id}`,
 		since: ledger?.dispatched ? ledger.dispatched.ts * 1000 : null,
 		until: end === null ? null : end * 1000
 	});
+	if (value.available) {
+		value.git = await runtime.evidence.diff(worktree, await runtime.howItWorked.base(task.id));
+		const resolved = task.projectId
+			? await runtime.playbooks.resolve(task.projectId, task.id)
+			: null;
+		if (resolved?.ok) {
+			const reasons = (resolved.value as unknown as { drift_reasons?: unknown }).drift_reasons;
+			value.driftReasons = Array.isArray(reasons)
+				? reasons.filter(
+						(r): r is string => typeof r === 'string' && ['pack', 'binding', 'origin'].includes(r)
+					)
+				: [];
+		}
+	}
 	return { ok: true, value };
 }

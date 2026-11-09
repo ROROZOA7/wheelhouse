@@ -1,6 +1,7 @@
 import { open, readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { runBounded } from './exec';
+import { readWorkerEvidence } from './worker-evidence';
 import type { PrFeedback, PrFeedbackItem } from './changes';
 import { prNumber } from './model';
 import { TASK_ID } from './adapter';
@@ -79,6 +80,8 @@ class TtlCache<T> {
 
 export interface EvidenceOptions {
 	dataDir: string;
+	/** Optional read-only fm-pack evidence checker. */
+	packScript?: string;
 	env?: NodeJS.ProcessEnv;
 	now?: () => number;
 	/** Run `gh` for PRs without a cached Firstmate observation. */
@@ -191,6 +194,8 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export class EvidenceReader {
 	private dataDir: string;
+	private packScript?: string;
+	private workers = new Map<string, { at: number; value: ReturnType<typeof readWorkerEvidence> }>();
 	private env: NodeJS.ProcessEnv;
 	private now: () => number;
 	private useGh: boolean;
@@ -208,6 +213,7 @@ export class EvidenceReader {
 
 	constructor(opts: EvidenceOptions) {
 		this.dataDir = opts.dataDir;
+		this.packScript = opts.packScript;
 		this.env = opts.env ?? process.env;
 		this.now = opts.now ?? Date.now;
 		this.useGh = opts.useGh ?? true;
@@ -369,14 +375,15 @@ export class EvidenceReader {
 	}
 
 	/** Files changed in the task worktree relative to its base branch (incl. uncommitted). */
-	diff(worktree: string | null) {
+	diff(worktree: string | null, recordedBase?: string) {
 		if (!worktree || !path.isAbsolute(worktree)) {
 			return Promise.resolve<Available<never>>({
 				available: false,
 				reason: 'Firstmate has no worktree recorded for this task.'
 			});
 		}
-		return this.diffs.get(worktree, () => readDiff(worktree, this.env));
+		const base = recordedBase && /^[a-f0-9]{40,64}$/i.test(recordedBase) ? recordedBase : undefined;
+		return this.diffs.get(`${worktree}:${base ?? ''}`, () => readDiff(worktree, this.env, base));
 	}
 
 	/**
@@ -521,6 +528,15 @@ export class EvidenceReader {
 		return { kind: 'diff', files, totalFiles: d.value.total };
 	}
 
+	async worker(id: string) {
+		const hit = this.workers.get(id);
+		if (hit && this.now() - hit.at < 15_000) return hit.value;
+		const value = readWorkerEvidence(this.dataDir, id, this.packScript, this.env);
+		this.workers.set(id, { at: this.now(), value });
+		if (this.workers.size > 500) this.workers.delete(this.workers.keys().next().value!);
+		return value;
+	}
+
 	/** Everything the task page shows as evidence. */
 	async evidence(
 		task: TaskSummary,
@@ -556,7 +572,24 @@ export class EvidenceReader {
 						value: { detail: task.current.detail }
 					}
 				: { available: false, reason: 'No validation run is attributed to this task right now.' };
+		const recordedWorker = await this.worker(task.id);
+		const worker = recordedWorker
+			? { ...recordedWorker, problems: [...recordedWorker.problems] }
+			: null;
+		if (worker?.head && worktree) {
+			const head = await git(worktree, ['rev-parse', '--verify', 'HEAD'], this.env);
+			if (!head.ok || head.stdout.trim() !== worker.head) {
+				worker.ok = false;
+				worker.problems.push({
+					code: 'head-mismatch',
+					path: 'head_sha',
+					detail:
+						'Evidence head_sha does not match the task worktree HEAD, or HEAD could not be read.'
+				});
+			}
+		}
 		return {
+			worker,
 			files,
 			pr,
 			report,
@@ -634,15 +667,15 @@ async function git(
 	});
 }
 
-async function readDiff(worktree: string, env: NodeJS.ProcessEnv) {
+async function readDiff(worktree: string, env: NodeJS.ProcessEnv, recordedBase?: string) {
 	const observedAt = new Date().toISOString();
-	let base: string | null = null;
+	let base: string | null = recordedBase ?? null;
 	const head = await git(
 		worktree,
 		['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
 		env
 	);
-	if (head.ok && head.stdout.trim()) base = head.stdout.trim();
+	if (!base && head.ok && head.stdout.trim()) base = head.stdout.trim();
 	if (!base) {
 		for (const candidate of ['origin/main', 'origin/master', 'main', 'master']) {
 			const r = await git(worktree, ['rev-parse', '--verify', '--quiet', candidate], env);

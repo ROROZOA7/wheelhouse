@@ -120,10 +120,56 @@ describe('stages', () => {
 		expect(stepGist(step({ evidence: ['pr', 'screenshots'] }), task(), e)).toBe(
 			'Pull request #7 merged · 1 screenshot'
 		);
-		expect(stepGist(step({ evidence: ['validation'] }), task(), e)).toBe('Checks passed');
+		expect(stepGist(step({ evidence: ['validation'] }), task(), e)).toBe(
+			'Checks done, outcome unknown'
+		);
+		expect(
+			stepGist(
+				step({ evidence: ['validation'] }),
+				task({
+					current: { detail: 'Ready in branch; verify cmds exit 127' } as TaskSummary['current']
+				}),
+				e
+			)
+		).toBe('Checks failed');
 		expect(stepGist(step({ evidence: ['validation'], state: 'current' }), task(), e)).toBeNull();
 	});
 
+	it('requires valid successful commands and lets failures override success', () => {
+		const worker: NonNullable<TaskEvidence['worker']> = {
+			source: 'local shape check',
+			ok: true,
+			problems: [],
+			warnings: [],
+			head: 'a',
+			decisions: [],
+			commands: [{ id: 'check', cmd: 'npm test', exit: 0, skipped_reason: null }]
+		};
+		const validation = step({ evidence: ['validation'] });
+		expect(stepGist(validation, task(), ev({ worker }))).toBe('Checks passed');
+		expect(stepGist(validation, task(), ev({ worker: { ...worker, ok: false } }))).toBe(
+			'Checks done, outcome unknown'
+		);
+		expect(
+			stepGist(
+				validation,
+				task(),
+				ev({
+					worker: {
+						...worker,
+						commands: [{ ...worker.commands[0], exit: null, skipped_reason: 'not run' }]
+					}
+				})
+			)
+		).toBe('Checks done, outcome unknown');
+		expect(
+			stepGist(
+				validation,
+				task({ current: { detail: 'exit 127' } as TaskSummary['current'] }),
+				ev({ worker })
+			)
+		).toBe('Checks failed');
+	});
 	it('falls back to the note, and says nothing for stages not reached', () => {
 		expect(stepGist(step({ note: 'Queued behind wh-2' }), task(), ev())).toBe('Queued behind wh-2');
 		expect(stepGist(step({ state: 'upcoming', note: 'x' }), task(), ev())).toBeNull();

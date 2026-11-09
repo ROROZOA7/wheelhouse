@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { live } from '$lib/client/live.svelte';
+	import WorkerEvidence from './WorkerEvidence.svelte';
 	import type { SlotEntry } from '$lib/plugins/types';
 	import SlotContent from '$lib/components/wh/plugins/SlotContent.svelte';
 	import { ago, clock } from '$lib/format';
@@ -202,6 +203,7 @@
 {/snippet}
 
 {#snippet validationBlock()}
+	<WorkerEvidence value={ev.worker} />
 	{#if showsChecks(task)}
 		<ChecksTimeline
 			pipeline={task.pipeline}

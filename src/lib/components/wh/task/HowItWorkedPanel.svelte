@@ -72,7 +72,7 @@
 					</dd>
 				</div>
 				<div>
-					<dt class="text-xs text-muted-foreground">Edits</dt>
+					<dt class="text-xs text-muted-foreground">Editing-tool calls</dt>
 					<dd>{s.edits} to {s.files} {s.files === 1 ? 'file' : 'files'}</dd>
 				</div>
 				<div>
@@ -88,6 +88,29 @@
 					<dd>{s.sessions}</dd>
 				</div>
 			</dl>
+			{#if how.git?.available}
+				<p class="mt-3 text-sm">
+					Changed in git: {how.git.value.total}
+					{how.git.value.total === 1 ? 'file' : 'files'}
+					<span class="text-xs text-muted-foreground">against {how.git.value.base}</span>
+				</p>
+				{#if how.git.value.files.length}
+					<ul class="mt-1 text-xs text-muted-foreground" aria-label="Git changed files">
+						{#each how.git.value.files.slice(0, 20) as file, i (i)}
+							<li><code>{file.path}</code></li>
+						{/each}
+					</ul>
+					{#if how.git.value.total > 20}<p class="text-xs text-muted-foreground">
+							Showing the first 20 files.
+						</p>{/if}
+				{/if}
+				{#if how.git.value.total !== s.files}<p class="text-xs text-muted-foreground">
+						Git changes differ from editing-tool counts. Commands such as Bash or Python can change
+						files without an editing-tool call.
+					</p>{/if}
+			{:else if how.git}<p class="mt-3 text-xs text-muted-foreground">
+					Git changes unavailable: {how.git.reason}
+				</p>{/if}
 			{#if Object.keys(s.skills).length}
 				<p class="mt-3 text-sm">
 					{#each Object.entries(s.skills) as [name, n], i (name)}{i ? ', ' : ''}<code
@@ -104,6 +127,9 @@
 		{#if how.conformance}
 			{@const c = how.conformance}
 			<div class="rounded-xl border p-4" data-conformance>
+				{#if how.driftReasons?.length}<p class="mb-2 text-sm text-warning">
+						Playbook changed since dispatch: {how.driftReasons.join(', ')}.
+					</p>{/if}
 				<h3 class="text-sm font-medium">
 					Against its playbook <span class="font-normal text-muted-foreground">({c.pack})</span>
 				</h3>
