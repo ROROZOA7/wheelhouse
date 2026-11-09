@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createScriptAdapter, DEFAULT_SERVER } from './adapter';
-import { crewEndpoint, crewTmux } from './crew';
+import { crewEndpoint, crewTmux, metaWorktree } from './crew';
 import type { RunOptions, RunResult } from './exec';
 import { FIRSTMATE_TMUX, firstmateTmux } from '../sessions/firstmate';
 import { which, type Run } from '../sessions/tmux';
@@ -314,5 +314,26 @@ describe.skipIf(!which('tmux', process.env.PATH))('on real tmux servers', () => 
 		defaultServer('kill-server');
 		worker('crew-after-restart');
 		expect(await sees('crew-after-restart', env)).toContain('crew-after-restart');
+	});
+});
+
+describe('metaWorktree', () => {
+	let dir: string;
+	beforeEach(() => {
+		dir = mkdtempSync(path.join(tmpdir(), 'wh-meta-'));
+		mkdirSync(path.join(dir, 'state'));
+	});
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	it('reads the worktree a finished task record names', async () => {
+		writeFileSync(path.join(dir, 'state', 'wh-1.meta'), 'window=a:b\nworktree=/wt/1/repo\n');
+		expect(await metaWorktree(dir, 'wh-1')).toBe('/wt/1/repo');
+	});
+
+	it('gives null for no record, a relative path, or a bad id', async () => {
+		expect(await metaWorktree(dir, 'wh-2')).toBeNull();
+		writeFileSync(path.join(dir, 'state', 'wh-3.meta'), 'worktree=rel/path\n');
+		expect(await metaWorktree(dir, 'wh-3')).toBeNull();
+		expect(await metaWorktree(dir, '../x')).toBeNull();
 	});
 });

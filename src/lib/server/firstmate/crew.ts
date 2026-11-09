@@ -178,3 +178,20 @@ export function crewTmux(opts: CrewTmuxOptions): (taskId?: string) => Promise<st
 		return best?.tmux ?? CREW_FALLBACK;
 	};
 }
+
+/**
+ * The worktree Firstmate's task record names (`worktree=` in state/<id>.meta), or null.
+ * The record outlives the snapshot row until teardown; read-only and bounded.
+ */
+export async function metaWorktree(homeDir: string, id: string): Promise<string | null> {
+	if (!TASK_ID.test(id)) return null;
+	const file = path.join(homeDir, 'state', `${id}.meta`);
+	try {
+		const st = await lstat(file);
+		if (!st.isFile() || st.size > META_MAX_BYTES) return null;
+		const wt = metaGet(await readFile(file, 'utf8'), 'worktree');
+		return path.isAbsolute(wt) ? wt : null;
+	} catch {
+		return null;
+	}
+}

@@ -577,6 +577,17 @@ describe('Collector', () => {
 		expect(collector.changeRoute('building')).toBeNull();
 	});
 
+	it('remembers a task worktree after the task leaves the snapshot', async () => {
+		const { collector, fake } = make();
+		fake.setRows([taskRow({ id: 'gone', worktree: '/wt/slot-1' })]);
+		await collector.tick();
+		expect(collector.worktreeOf('gone')).toBe('/wt/slot-1');
+		fake.setRows([]);
+		await collector.tick();
+		expect(collector.worktreeOf('gone')).toBe('/wt/slot-1');
+		expect(collector.worktreeOf('never')).toBeNull();
+	});
+
 	it('cannot tell whether a worker is live from a stale snapshot', async () => {
 		const PR = 'https://github.com/o/r/pull/2';
 		const task = {

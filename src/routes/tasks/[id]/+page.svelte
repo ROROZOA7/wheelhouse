@@ -22,6 +22,7 @@
 	import TimePanel from '$lib/components/wh/task/TimePanel.svelte';
 	import LogPanel from '$lib/components/wh/task/LogPanel.svelte';
 	import PluginSection from '$lib/components/wh/task/PluginSection.svelte';
+	import HowItWorkedPanel from '$lib/components/wh/task/HowItWorkedPanel.svelte';
 	import { pullRequests } from '$lib/client/pullrequests';
 	import { previewChecks } from '$lib/client/previewchecks.svelte';
 	import { DEFAULT_TAB, pickTab, taskTabs } from '$lib/taskpage';
@@ -91,6 +92,8 @@
 			? taskTabs({
 					preview: !!task.preview,
 					shots: shots.length,
+					// Only Claude Code sessions can be read (a finished task's worker may be gone: then the server uses the ledger's harness).
+					how: (task.worker?.harness ?? 'claude').toLowerCase() === 'claude',
 					plugins: pluginTabs.map((e) => ({ key: e.key, title: e.title })),
 					build: {
 						// Only what is still waiting on an answer is counted.
@@ -323,6 +326,10 @@
 						{:else if tab.id === 'checks'}<ChecksReport
 								checks={detail.build.checks}
 								taskId={task.id}
+							/>
+						{:else if tab.id === 'how'}<HowItWorkedPanel
+								taskId={task.id}
+								shown={active === 'how'}
 							/>
 						{:else if tab.id === 'docs'}<DocsPanel docs={detail.build.docs} taskId={task.id} />
 						{:else}

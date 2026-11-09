@@ -80,6 +80,9 @@ const DEFAULT_INTERVAL = 5_000;
 /** How many of a task's newest screenshots its card shows as thumbnails. */
 const CARD_SHOTS = 4;
 
+/** Task worktrees remembered after they leave the snapshot. */
+const MAX_REMEMBERED_WORKTREES = 2000;
+
 export class Collector {
 	private opts: Required<
 		Pick<CollectorOptions, 'intervalMs' | 'minSnapshotIntervalMs' | 'maxSnapshotIntervalMs'>
@@ -230,6 +233,7 @@ export class Collector {
 			return null;
 		}
 		this.snapshot = r.value;
+		this.rememberWorktrees(r.value);
 		this.lastSuccessAt = this.now();
 		this.consecutiveFailures = 0;
 		this.lastError = null;
@@ -411,6 +415,28 @@ export class Collector {
 	/** Firstmate's data folder, as the latest snapshot names it. */
 	dataDirectory(): string {
 		return this.snapshot ? this.dataDir(this.snapshot) : `${this.opts.install.homeDir}/data`;
+	}
+
+	/**
+	 * Worktrees seen in snapshots, by task, so a task that has left the snapshot (merged,
+	 * cleaned up) still has one to match its session by. Bounded; lost on restart.
+	 */
+	private worktrees = new Map<string, string>();
+	private rememberWorktrees(snap: FleetSnapshot) {
+		for (const t of snap.tasks) {
+			if (!t.worktree.present || !t.worktree.path) continue;
+			this.worktrees.delete(t.id);
+			this.worktrees.set(t.id, t.worktree.path);
+		}
+		while (this.worktrees.size > MAX_REMEMBERED_WORKTREES)
+			this.worktrees.delete(this.worktrees.keys().next().value!);
+	}
+
+	/** The task's worktree: live from the snapshot, else the last one a snapshot showed. */
+	worktreeOf(id: string): string | null {
+		const row = this.row(id);
+		if (row?.worktree.present && row.worktree.path) return row.worktree.path;
+		return this.worktrees.get(id) ?? null;
 	}
 
 	ledgerTask(id: string): LedgerTask | null {
