@@ -181,6 +181,7 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
 - **Unbound project:** `binding:null`, `readiness:{ok:true, note:"no pack bound"}`, so today's behaviour is unchanged.
 - **Readiness refusal codes:**
   - `missing-skill` (a vendored file is absent)
+  - `project-ref-unknown`
   - `unknown-skill`, `banned-skill`, `skills-override-conflict`
   - `no-verify-commands`
   - `secret-worktreeinclude` (`.worktreeinclude` on `origin/<default>` matches `.env*`, `*.pem`, `*.key`, `credentials*`)
@@ -193,13 +194,16 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
 - **Version label:** the pack is found by name + digest across version dirs. If its manifest version differs from the binding's label, resolve reports the pack's version plus a `version-label` warning.
 - **Unbound project:** `project_settings:null`.
 - **Install-time refusals** (source tree): `link-unsafe`, `license-missing`, `settings-unsupported`, `plugin-name-mismatch`, `requires-unsupported`, `missing-skill`, `manifest-invalid` (including allow_global without a fallback), `path-unsafe`, `pack-oversized`, `source-unavailable`.
-- **render-brief** refuses with `preamble-unsafe` when a preamble line matches `^\s*Delivery contract:` (exit 3).
+- **render-brief** refuses with `playbook-unsafe` (exit 3) when ANY rendered Playbook line matches `^\s*([-*]\s+)?Delivery contract:`. Verify ids and cmds must be single-line: refused from the manifest or binding, `ignored[]` from the repo narrowing.
+- **`project-ref-unknown`:** no readable `origin/HEAD`, `origin/main` or `origin/master`. This refuses, because the secret gate must never be skipped. Local branches are never read.
+- **Binding file present but invalid:** `readiness.ok:false` with `binding_file`, never the "no pack bound" note.
+- **YAML:** all reads refuse anchors and aliases, capped at 20000 nodes. Values in `ignored[]` are summarised as type(len), never repr'd.
 
 ### diff
 `fm-pack.sh diff <project> --to <name>@<version>#<digest> --json` →
 `{schema, from, to, changes:[{kind:"skill"|"verify"|"preamble"|"hook"|"mcp"|"setting"|"banned", op:"add"|"remove"|"change", id, before?, after?, text_diff?}], risk_changes:[…], requires_captain:bool}`
-- `changes[]` covers **every file** in both trees, compared by per-file mode + sha256. `kind` adds `policy|skill-file|manifest|file`, and executables are flagged.
-- `requires_captain` is true when hooks, mcp, settings, banned, policy or the preamble change, when any executable changes, or when a risk flag changes.
+- `changes[]` covers **every file** in both trees, compared by per-file mode + sha256. `kind` adds `policy|skill-file|manifest|plugin|mcp|hook|file`, and executables are flagged.
+- `requires_captain` is true when hooks, mcp, settings, banned, policy or the preamble change, when any executable changes, or when a risk flag changes, or any `plugin`/`mcp`/`hook` file changes. Files over 64 KB, non-UTF-8 files or files with lines over 4 KB get `content:"binary-or-large"` and `text_diff:null`.
 - `text_diff` is a unified diff, cut at 64 KB.
 
 ### render-brief
