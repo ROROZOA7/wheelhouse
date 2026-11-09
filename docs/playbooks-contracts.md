@@ -141,7 +141,7 @@ Wheelhouse checks it on start and every 10 min. `/api/health` reports `contracts
 
 ### list
 `fm-pack.sh list --json` →
-`{schema, packs:[{name, version, digest, source:{repo,commit,path}, installed_at, contents:{skills,hooks,mcp}, risk:["shell-hooks"|"network-mcp"|"shell-scripts"], update:{latest_commit,checked_at}|null, bound_projects:[{project, digest}]}]}`
+`{schema, binding_problems:[{code:"binding-invalid", detail}], packs:[{name, version, digest, source:{repo,commit,path}, installed_at, contents:{skills,hooks,mcp}, risk:["shell-hooks"|"network-mcp"|"shell-scripts"], update:{latest_commit,checked_at}|null, bound_projects:[{project, digest}]}]}`
 
 ### show
 `fm-pack.sh show <name>[@<version>[#<digest>]] --json` → `{schema, manifest, digest, files:[path], notices}`.
@@ -166,6 +166,7 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
  "project_settings":{"mode":"no-mistakes","yolo":false,"branch_prefix":"fm/","forge":"github","pr_text_mode":null,
                      "merge_policy":null,"sandbox_floor":null,"owner":"captain"},
  "ignored":[{"item":"…","reason":"repo files may only narrow"}],
+ "origin":{"ref":"refs/remotes/origin/main","commit":"<sha>"},
  "readiness":{"ok":true,"missing":[],"warnings":[],"refusals":[]}}
 ```
 
@@ -197,6 +198,7 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
 - **render-brief** refuses with `playbook-unsafe` (exit 3) when ANY rendered Playbook line matches `^\s*([-*]\s+)?Delivery contract:`. Verify ids and cmds must be single-line: refused from the manifest or binding, `ignored[]` from the repo narrowing.
 - **`project-ref-unknown`:** no readable `origin/HEAD`, `origin/main` or `origin/master`. This refuses, because the secret gate must never be skipped. Local branches are never read.
 - **Binding file present but invalid:** `readiness.ok:false` with `binding_file`, never the "no pack bound" note.
+- **Origin pinning:** the origin ref (exact `refs/remotes/origin/*`, not a symref) is resolved once to a commit, and every read uses `<sha>:<path>` with `GIT_NO_LAZY_FETCH=1`, so a project is never written. `.worktreeinclude` and `.firstmate/pack.yaml` must be regular files. `record --from-file` refuses `binding-changed` with reason `origin-moved` if the origin commit changed since resolve.
 - **YAML:** all reads refuse anchors and aliases, capped at 20000 nodes. Values in `ignored[]` are summarised as type(len), never repr'd.
 
 ### diff
