@@ -24,7 +24,7 @@ Design: [playbooks-architecture.md](playbooks-architecture.md).
   NOTICES.md                   # licence + attribution per vendored item
 ```
 
-**Installed (immutable):** `data/.packs/<name>/<version>/<tree_digest>/`.
+**Installed (immutable):** `data/.packs/<name>/<version>/<hex>/`, where the folder name is the **bare hex** of the tree digest (no `sha256:` prefix). JSON `digest` fields keep the `sha256:` prefix.
 - **tree_digest** = sha256 over the concatenation of lines `<mode> <sha256hex> <relpath>\n`, sorted by code point (Python `str` order).
   - `mode` is **normalised**: `755` if any execute bit is set, else `644`. Git stores only these two, so the digest doesn't depend on the checkout's umask.
   - `relpath` uses `/` separators.
@@ -145,7 +145,7 @@ Wheelhouse checks it on start and every 10 min. `/api/health` reports `contracts
 ### show
 `fm-pack.sh show <name>[@<version>[#<digest>]] --json` → `{schema, manifest, digest, files:[path], notices}`.
 
-Wheelhouse may read files directly under `data/.packs/<name>/<version>/<digest>/`; their realpath must stay inside that dir.
+Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; their realpath must stay inside that dir.
 
 ### resolve
 `fm-pack.sh resolve <project> [--task <id>] [--harness <h>] [--kind <k>] --json` →
