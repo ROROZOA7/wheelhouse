@@ -177,7 +177,7 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
   - With `--kind`: only that kind's rows. The supervisor passes the kind at intake (label or classification); the default is `default`.
 - **With `--task`:** adds `recorded_pack` and `drift:bool`.
 - **`state`:** `active|disabled`. Disabled items stay listed.
-- **`origin`:** `pack|binding|repo|global`.
+- **`origin`:** `pack|binding|repo|global|ticket` (`ticket` = from a ticket `Skills:` line).
 - **Unbound project:** `binding:null`, `readiness:{ok:true, note:"no pack bound"}`, so today's behaviour is unchanged.
 - **Readiness refusal codes:**
   - `missing-skill` (a vendored file is absent)
