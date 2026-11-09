@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { clock } from '$lib/format';
 	import { duration } from '$lib/insights';
-	import type { HowItWorked, WorkEvent, WorkEventKind } from '$lib/howitworked';
+	import { failed as failedEvent, type HowItWorked, type WorkEventKind } from '$lib/howitworked';
 	import { Bot, CircleAlert, FilePen, Plug, Sparkles, SquareTerminal } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 
@@ -41,7 +41,6 @@
 		edit: FilePen,
 		agent: Bot
 	};
-	const failedEvent = (e: WorkEvent) => e.ok === false || (e.exit !== null && e.exit !== 0);
 	const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
 </script>
 

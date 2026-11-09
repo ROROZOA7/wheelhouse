@@ -7,6 +7,7 @@ import {
 	parseTranscript,
 	summarize,
 	type ParseState,
+	type Tally,
 	type HowItWorked,
 	type WorkEvent
 } from '../../howitworked';
@@ -28,7 +29,7 @@ const CACHE_MS = 15_000;
 const MAX_RESULTS = 100;
 const MAX_PARSED = 300;
 
-type Parsed = { key: string; size: number; state: ParseState };
+type Parsed = { size: number; state: ParseState };
 
 /** A Map used as a small LRU: set() moves a key to the end, and the oldest go past `max`. */
 function remember<K, V>(map: Map<K, V>, key: K, value: V, max: number) {
@@ -69,12 +70,14 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 	/**
 	 * One transcript parsed for this task. Transcripts only grow, so a file read before
 	 * for the same task is carried on from where that read ended (a cut last line is read again).
+	 * Progress is kept per file and task together: a pooled slot's transcripts can be read
+	 * for more than one task, and each keeps its own progress instead of evicting the other's.
 	 */
 	private async parse(file: string, size: number, t: TaskSession, worktree: string) {
 		const dirs = packDirs(t);
-		const key = JSON.stringify([t.id, worktree, t.branch, t.since, t.until, dirs]);
-		let p = this.parsed.get(file);
-		if (!p || p.key !== key || p.size > size) p = { key, size: 0, state: parseState() };
+		const key = JSON.stringify([file, t.id, worktree, t.branch, t.since, t.until, dirs]);
+		let p = this.parsed.get(key);
+		if (!p || p.size > size) p = { size: 0, state: parseState() };
 		if (p.size < size) {
 			const read = await readRange(file, p.size, size, MAX_BYTES);
 			if (!read) return p.state;
@@ -95,9 +98,9 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 				},
 				p.state
 			);
-			p = { key, size: read.end - Buffer.byteLength(partial), state: p.state };
+			p = { size: read.end - Buffer.byteLength(partial), state: p.state };
 		}
-		remember(this.parsed, file, p, MAX_PARSED);
+		remember(this.parsed, key, p, MAX_PARSED);
 		return p.state;
 	}
 
@@ -119,6 +122,8 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 			.sort((a, b) => a.st.mtimeMs - b.st.mtimeMs)
 			.slice(-MAX_FILES);
 		let events: WorkEvent[] = [];
+		const tallies: Tally[] = [];
+		let total = 0;
 		const tokens = { input: 0, output: 0, cacheRead: 0 };
 		const changed = new Set<string>();
 		let sessions = 0;
@@ -128,6 +133,8 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 			sessions++;
 			// Copies: the parse state is kept and carried on by later reads.
 			events.push(...r.events.map((e) => ({ ...e })));
+			tallies.push(r.tally);
+			total += r.tally.events;
 			tokens.input += r.tokens.input;
 			tokens.output += r.tokens.output;
 			tokens.cacheRead += r.tokens.cacheRead;
@@ -139,9 +146,10 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 				reason: `No Claude Code session was found for this task (worktree ${worktree}, branch ${t.branch}).`
 			};
 		events.sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''));
-		const summary = summarize(events, tokens, changed.size, sessions);
-		const dropped = Math.max(0, events.length - MAX_EVENTS);
-		if (dropped) events = events.slice(-MAX_EVENTS);
+		const summary = summarize(tallies, tokens, changed.size, sessions);
+		if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
+		// The tallies count every step; the timeline keeps the latest.
+		const dropped = Math.max(0, total - events.length);
 		return {
 			available: true,
 			harness: 'claude',

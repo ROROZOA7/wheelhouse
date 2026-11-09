@@ -107,10 +107,39 @@ export interface ParseOptions {
 
 type Pending = { event: WorkEvent; startedAt: number | null };
 
+/** Running totals over every event parsed, including those the capped event list let go. */
+export interface Tally {
+	skills: Record<string, number>;
+	mcp: Record<string, { calls: number; failed: number }>;
+	bash: { runs: number; failed: number };
+	edits: number;
+	agents: number;
+	/** Every event seen, kept or not. */
+	events: number;
+	from: string | null;
+	to: string | null;
+}
+
+const tally = (): Tally => ({
+	skills: {},
+	mcp: {},
+	bash: { runs: 0, failed: 0 },
+	edits: 0,
+	agents: 0,
+	events: 0,
+	from: null,
+	to: null
+});
+
+/** Calls still waiting on their result; ones that never get one go first past this. */
+const MAX_PENDING = 1000;
+
 /** What parsing one transcript has found so far; pass it back to continue with appended lines. */
 export interface ParseState {
 	matched: boolean;
+	/** The latest MAX_EVENTS events; `tally` counts them all. */
 	events: WorkEvent[];
+	tally: Tally;
 	tokens: { input: number; output: number; cacheRead: number };
 	files: Set<string>;
 	pending: Map<string, Pending>;
@@ -121,6 +150,7 @@ export interface ParseState {
 export const parseState = (): ParseState => ({
 	matched: false,
 	events: [],
+	tally: tally(),
 	tokens: { input: 0, output: 0, cacheRead: 0 },
 	files: new Set(),
 	pending: new Map(),
@@ -137,7 +167,7 @@ export function parseTranscript(
 	o: ParseOptions,
 	state: ParseState = parseState()
 ): ParseState {
-	const { events, tokens, pending, files, counted } = state;
+	const { events, tokens, pending, files, counted, tally: t } = state;
 	const root = o.worktree.endsWith('/') ? o.worktree : `${o.worktree}/`;
 	for (const line of lines) {
 		if (!line.includes(o.branch)) continue;
@@ -171,9 +201,14 @@ export function parseTranscript(
 				const ev = toolEvent(c.name, (c.input ?? {}) as Record<string, unknown>, at, o, root);
 				if (!ev) continue;
 				if (ev.kind === 'edit' && ev.line) files.add(ev.line);
+				count(t, ev);
 				events.push(ev);
-				if (typeof c.id === 'string')
+				// Only the latest are kept; the tally has the rest.
+				if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
+				if (typeof c.id === 'string') {
 					pending.set(c.id, { event: ev, startedAt: Number.isNaN(ts) ? null : ts });
+					if (pending.size > MAX_PENDING) pending.delete(pending.keys().next().value!);
+				}
 			} else if (c?.type === 'tool_result' && typeof c.tool_use_id === 'string') {
 				const p = pending.get(c.tool_use_id);
 				if (!p) continue;
@@ -182,6 +217,10 @@ export function parseTranscript(
 				if (p.startedAt !== null && !Number.isNaN(ts))
 					p.event.durationMs = Math.max(0, ts - p.startedAt);
 				if (p.event.kind === 'bash') p.event.exit = exitCode(c, rec);
+				if (failed(p.event)) {
+					if (p.event.kind === 'bash') t.bash.failed++;
+					else if (p.event.kind === 'mcp') t.mcp[p.event.name].failed++;
+				}
 			}
 		}
 	}
@@ -189,6 +228,23 @@ export function parseTranscript(
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+
+/** Whether a finished step failed: an error result, or a command's non-zero exit. */
+export const failed = (e: WorkEvent) => e.ok === false || (e.exit !== null && e.exit !== 0);
+
+/** Count one new step (its failure is counted when its result arrives). */
+function count(t: Tally, e: WorkEvent) {
+	t.events++;
+	if (e.at) {
+		if (!t.from || e.at < t.from) t.from = e.at;
+		if (!t.to || e.at > t.to) t.to = e.at;
+	}
+	if (e.kind === 'skill') t.skills[e.name] = (t.skills[e.name] ?? 0) + 1;
+	else if (e.kind === 'mcp') (t.mcp[e.name] ??= { calls: 0, failed: 0 }).calls++;
+	else if (e.kind === 'bash') t.bash.runs++;
+	else if (e.kind === 'edit') t.edits++;
+	else if (e.kind === 'agent') t.agents++;
+}
 
 function toolEvent(
 	name: string,
@@ -239,9 +295,9 @@ function exitCode(c: Record<string, unknown>, rec: Record<string, unknown>): num
 	return c.is_error === true ? null : 0;
 }
 
-/** Totals over a task's events. */
+/** Totals over a task's transcripts, from each one's running tally. */
 export function summarize(
-	events: WorkEvent[],
+	tallies: Tally[],
 	tokens: WorkSummary['tokens'],
 	files: number,
 	sessions: number
@@ -258,21 +314,19 @@ export function summarize(
 		from: null,
 		to: null
 	};
-	for (const e of events) {
-		if (e.at) {
-			if (!s.from || e.at < s.from) s.from = e.at;
-			if (!s.to || e.at > s.to) s.to = e.at;
+	for (const t of tallies) {
+		if (t.from && (!s.from || t.from < s.from)) s.from = t.from;
+		if (t.to && (!s.to || t.to > s.to)) s.to = t.to;
+		for (const [k, n] of Object.entries(t.skills)) s.skills[k] = (s.skills[k] ?? 0) + n;
+		for (const [k, m] of Object.entries(t.mcp)) {
+			const into = (s.mcp[k] ??= { calls: 0, failed: 0 });
+			into.calls += m.calls;
+			into.failed += m.failed;
 		}
-		if (e.kind === 'skill') s.skills[e.name] = (s.skills[e.name] ?? 0) + 1;
-		else if (e.kind === 'mcp') {
-			const m = (s.mcp[e.name] ??= { calls: 0, failed: 0 });
-			m.calls++;
-			if (e.ok === false) m.failed++;
-		} else if (e.kind === 'bash') {
-			s.bash.runs++;
-			if (e.ok === false || (e.exit !== null && e.exit !== 0)) s.bash.failed++;
-		} else if (e.kind === 'edit') s.edits++;
-		else if (e.kind === 'agent') s.agents++;
+		s.bash.runs += t.bash.runs;
+		s.bash.failed += t.bash.failed;
+		s.edits += t.edits;
+		s.agents += t.agents;
 	}
 	return s;
 }
