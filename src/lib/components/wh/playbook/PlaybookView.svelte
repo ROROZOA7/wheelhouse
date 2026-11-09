@@ -47,7 +47,7 @@
 		</p>
 		<ul class="mt-1 list-disc pl-5 text-muted-foreground">
 			{#each r.readiness.refusals as x, i (i)}<li>{codeOf(x)}</li>{/each}
-			{#each r.readiness.missing as m (m)}<li>Missing skill: {m}</li>{/each}
+			{#each r.readiness.missing as m, i (i)}<li>Missing skill: {m}</li>{/each}
 		</ul>
 	</div>
 {/if}
@@ -79,7 +79,7 @@
 				{PHASE_LABEL[g.phase]}
 			</h3>
 			<ul class="mt-1.5 divide-y rounded-lg border">
-				{#each g.skills as s (s.name)}
+				{#each g.skills as s, i (i)}
 					<li
 						class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm"
 						data-skill={s.name}
@@ -111,7 +111,7 @@
 		<section class="mt-8" aria-labelledby="pb-banned">
 			<h2 id="pb-banned" class="text-sm font-medium">Not allowed</h2>
 			<ul class="mt-3 flex flex-wrap gap-2">
-				{#each r.banned as b (b.id)}
+				{#each r.banned as b, i (i)}
 					<li class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs">
 						<Ban class="size-3" aria-hidden="true" />{b.id}
 						<span class="text-muted-foreground">{b.kind === 'skill' ? 'skill' : 'tool'}</span>
@@ -125,7 +125,7 @@
 		<h2 id="pb-verify" class="text-sm font-medium">Verify commands</h2>
 		{#if r.verify_commands.length}
 			<ul class="mt-3 divide-y rounded-lg border">
-				{#each r.verify_commands as v (v.id)}
+				{#each r.verify_commands as v, i (i)}
 					<li class="flex items-baseline gap-3 px-3 py-2 text-sm">
 						<code class="font-mono text-xs">{v.cmd}</code>
 						<span class="ml-auto text-xs text-muted-foreground">{ORIGIN_LABEL[v.origin]}</span>
