@@ -1,4 +1,6 @@
-import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, writeFile, unlink, open } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { constants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -69,6 +71,23 @@ const task = {
 };
 
 describe('HowItWorkedService', () => {
+	it('rejects FIFO pack records promptly', async () => {
+		const { home } = await setup();
+		const fifo = path.join(home, 'data', 'wh-7', 'pack.json');
+		await unlink(fifo);
+		execFileSync('mkfifo', [fifo]);
+		const rescue = setTimeout(async () => {
+			const h = await open(fifo, constants.O_RDWR | constants.O_NONBLOCK);
+			await h.close();
+		}, 500);
+		const started = Date.now();
+		try {
+			expect(await new HowItWorkedService([], home).base('wh-7')).toBeUndefined();
+			expect(Date.now() - started).toBeLessThan(400);
+		} finally {
+			clearTimeout(rescue);
+		}
+	});
 	it('reads a Claude worker’s session for this task only, and checks it against its pack', async () => {
 		const { projects, home } = await setup();
 		const svc = new HowItWorkedService([new ClaudeTranscripts(projects)], home);

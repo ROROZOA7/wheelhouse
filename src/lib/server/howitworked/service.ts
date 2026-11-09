@@ -1,4 +1,5 @@
 import { open, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { TASK_ID } from '../firstmate/adapter';
 import path from 'node:path';
 import { digestDir, type HowItWorked, type RecordedPack } from '../../howitworked';
@@ -47,7 +48,10 @@ export class HowItWorkedService {
 			if (!dir.startsWith(data + path.sep)) return null;
 			const file = await realpath(path.join(dir, 'pack.json'));
 			if (!file.startsWith(dir + path.sep)) return null;
-			const handle = await open(file, 'r');
+			const handle = await open(
+				file,
+				constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+			);
 			try {
 				const st = await handle.stat();
 				if (!st.isFile() || st.size > 256 * 1024) return null;

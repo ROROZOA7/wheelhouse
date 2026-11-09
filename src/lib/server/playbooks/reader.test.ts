@@ -78,6 +78,9 @@ esac`);
 			ok: false,
 			reason: 'Not a task id.'
 		});
+		for (const length of [101, 128])
+			expect((await r.resolve('wheelhouse', 'a'.repeat(length))).ok).toBe(true);
+		expect((await r.resolve('wheelhouse', 'a'.repeat(129))).ok).toBe(false);
 		const result = await r.resolve('wheelhouse', 'pilot');
 		expect(
 			result.ok && (result.value as unknown as { drift_reasons: string[] }).drift_reasons

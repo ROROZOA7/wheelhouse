@@ -124,12 +124,12 @@
 			</p>
 		</div>
 
+		{#if how.driftReasons?.length}<p class="text-sm text-warning" data-drift>
+				Playbook changed since dispatch: {how.driftReasons.join(', ')}.
+			</p>{/if}
 		{#if how.conformance}
 			{@const c = how.conformance}
 			<div class="rounded-xl border p-4" data-conformance>
-				{#if how.driftReasons?.length}<p class="mb-2 text-sm text-warning">
-						Playbook changed since dispatch: {how.driftReasons.join(', ')}.
-					</p>{/if}
 				<h3 class="text-sm font-medium">
 					Against its playbook <span class="font-normal text-muted-foreground">({c.pack})</span>
 				</h3>

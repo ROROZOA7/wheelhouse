@@ -137,7 +137,7 @@ export function checkWorkerEvidence(value: unknown, task: string): WorkerEvidenc
 				rung: String(v.rung),
 				choice: v.choice as string,
 				why: v.why as string,
-				open: (v.why as string).startsWith('UNRESOLVED:') || v.rung === 'human-gate'
+				open: (v.why as string).startsWith('UNRESOLVED:')
 			});
 		});
 	return {

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, writeFile, symlink, rm, chmod } from 'node:fs/promises';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { readWorkerEvidence } from './worker-evidence';
 const roots: string[] = [];
@@ -24,6 +27,23 @@ const record = () => ({
 	decisions: []
 });
 describe('confined worker evidence reader', () => {
+	it('rejects a FIFO promptly without waiting for a writer', async () => {
+		const { data, dir } = await setup();
+		const fifo = path.join(dir, 'evidence.json');
+		execFileSync('mkfifo', [fifo]);
+		// Rescue a broken blocking reader after the assertion deadline so the suite cannot hang.
+		const rescue = setTimeout(async () => {
+			const h = await open(fifo, constants.O_RDWR | constants.O_NONBLOCK);
+			await h.close();
+		}, 500);
+		const started = Date.now();
+		try {
+			expect((await readWorkerEvidence(data, 'pilot'))?.ok).toBe(false);
+			expect(Date.now() - started).toBeLessThan(400);
+		} finally {
+			clearTimeout(rescue);
+		}
+	});
 	it('ignores missing evidence, reports invalid JSON and size limits', async () => {
 		const { data, dir } = await setup();
 		expect(await readWorkerEvidence(data, 'pilot')).toBeNull();

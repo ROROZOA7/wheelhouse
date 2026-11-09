@@ -1,4 +1,5 @@
 import { open, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import {
 	checkWorkerEvidence,
@@ -37,7 +38,10 @@ export async function readWorkerEvidence(
 			return fail('Task data directory escapes the Firstmate data directory.');
 		const file = await realpath(path.join(root, 'evidence.json'));
 		if (!inside(root, file)) return fail('evidence.json escapes this task’s data directory.');
-		const handle = await open(file, 'r');
+		const handle = await open(
+			file,
+			constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+		);
 		try {
 			const st = await handle.stat();
 			if (!st.isFile() || st.size > MAX)

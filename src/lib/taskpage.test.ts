@@ -168,7 +168,24 @@ describe('stages', () => {
 				task({ current: { detail: 'exit 127' } as TaskSummary['current'] }),
 				ev({ worker })
 			)
-		).toBe('Checks failed');
+		).toBe('Checks passed');
+		const stale = { ...worker, ok: false, commands: [{ ...worker.commands[0], exit: 127 }] };
+		const passing = task({ pipeline: { outcome: 'passed' } as TaskSummary['pipeline'] });
+		expect(
+			stepGist(validation, passing, ev({ worker: stale, validation: seen({ detail: 'passed' }) }))
+		).toBe('Checks passed');
+		for (const detail of ['No checks failed', 'Fixed failed tests; all checks pass']) {
+			expect(
+				stepGist(validation, task({ current: { detail } as TaskSummary['current'] }), ev())
+			).toBe('Checks done, outcome unknown');
+			expect(
+				stepGist(
+					validation,
+					task({ current: { detail } as TaskSummary['current'] }),
+					ev({ worker })
+				)
+			).toBe('Checks passed');
+		}
 	});
 	it('falls back to the note, and says nothing for stages not reached', () => {
 		expect(stepGist(step({ note: 'Queued behind wh-2' }), task(), ev())).toBe('Queued behind wh-2');

@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskSummary } from '../../types';
 import {
 	answeredRoundFromLog,
 	ciChecksFromLog,
@@ -32,6 +33,23 @@ beforeEach(() => {
 	mkdirSync(path.join(data, 't-1', 'screenshots'), { recursive: true });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+it('starts worker evidence while independent evidence is still pending', async () => {
+	const r = reader();
+	let release!: (v: Awaited<ReturnType<EvidenceReader['pr']>>) => void;
+	vi.spyOn(r, 'pr').mockReturnValue(
+		new Promise((resolve) => {
+			release = resolve;
+		})
+	);
+	vi.spyOn(r, 'report').mockResolvedValue({ available: false, reason: 'test' });
+	vi.spyOn(r, 'screenshots').mockResolvedValue([]);
+	const worker = vi.spyOn(r, 'worker').mockResolvedValue(null);
+	const pending = r.evidence({ id: 't-1', status: 'queued', current: null } as TaskSummary, null);
+	expect(worker).toHaveBeenCalledWith('t-1');
+	release({ available: false, reason: 'test' });
+	await pending;
+});
 
 describe('screenshots', () => {
 	it('lists the worker’s images first, then no-mistakes run evidence', async () => {

@@ -544,7 +544,7 @@ export class EvidenceReader {
 		runIds: readonly string[] = []
 	): Promise<TaskEvidence> {
 		const worktree = row?.worktree.present ? row.worktree.path : null;
-		const [files, pr, report, shots] = await Promise.all([
+		const [files, pr, report, shots, recordedWorker] = await Promise.all([
 			row
 				? row.worktree.present
 					? this.diff(worktree)
@@ -561,7 +561,8 @@ export class EvidenceReader {
 					}),
 			this.pr(task.id, task.pr?.url ?? null),
 			this.report(task.id, row?.report.path ?? null),
-			this.screenshots(task.id, runIds)
+			this.screenshots(task.id, runIds),
+			this.worker(task.id)
 		]);
 		const validation: TaskEvidence['validation'] =
 			task.current?.source === 'run-step' && task.current.detail
@@ -572,7 +573,6 @@ export class EvidenceReader {
 						value: { detail: task.current.detail }
 					}
 				: { available: false, reason: 'No validation run is attributed to this task right now.' };
-		const recordedWorker = await this.worker(task.id);
 		const worker = recordedWorker
 			? { ...recordedWorker, problems: [...recordedWorker.problems] }
 			: null;

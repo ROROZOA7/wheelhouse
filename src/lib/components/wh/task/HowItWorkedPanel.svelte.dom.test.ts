@@ -108,6 +108,11 @@ describe('HowItWorkedPanel', () => {
 		expect(document.body.textContent).toContain('binding, origin');
 	});
 
+	it('shows known drift without a conformance record', async () => {
+		await render({ ...how, conformance: null, driftReasons: ['origin'] });
+		expect(document.querySelector('[data-drift]')?.textContent).toContain('origin');
+		expect(document.querySelector('[data-conformance]')).toBeNull();
+	});
 	it('says why when the session cannot be read', async () => {
 		await render({ available: false, reason: 'Not available for codex workers yet.' });
 		expect(document.querySelector('[data-how-unavailable]')?.textContent).toMatch(/codex/);

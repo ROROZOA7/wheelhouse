@@ -85,14 +85,23 @@ export function stepGist(
 			const status = task.current?.detail ?? '';
 			const failed =
 				s.failed ||
-				task.pipeline?.outcome === 'failed' ||
-				worker?.commands.some((c) => c.exit !== null && c.exit !== 0) ||
-				/\b(?:failed|exit\s*[=:]?\s*[1-9]\d*)\b/i.test(status);
+				(ev?.validation.available && task.pipeline?.outcome === 'failed') ||
+				(worker?.ok && worker.commands.some((c) => c.exit !== null && c.exit !== 0));
 			const passed =
 				(ev?.validation.available && task.pipeline?.outcome === 'passed') ||
 				(worker?.ok && worker.commands.length > 0 && worker.commands.every((c) => c.exit === 0));
+			// Prose is only a fallback; historical/negated failures cannot override current evidence.
+			const proseFailed =
+				!failed &&
+				!passed &&
+				/\b(?:checks failed|verify cmds exit\s*[=:]?\s*[1-9]\d*)\b/i.test(status) &&
+				!/\b(?:no checks failed|fixed|previous|earlier)\b/i.test(status);
 			parts.push(
-				failed ? 'Checks failed' : passed ? 'Checks passed' : 'Checks done, outcome unknown'
+				failed || proseFailed
+					? 'Checks failed'
+					: passed
+						? 'Checks passed'
+						: 'Checks done, outcome unknown'
 			);
 		}
 	}

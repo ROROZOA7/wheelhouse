@@ -51,11 +51,15 @@ describe('worker evidence shape', () => {
 		const r = checkWorkerEvidence(
 			{
 				...valid(),
-				decisions: [{ rung: 'human-gate', choice: 'human-gate-x', why: 'UNRESOLVED: choose' }]
+				decisions: [
+					{ rung: 'human-gate', choice: 'human-gate-x', why: 'UNRESOLVED: choose' },
+					{ rung: 'human-gate', choice: 'option-a', why: 'The user selected option A.' }
+				]
 			},
 			'pilot'
 		);
 		expect(r.decisions[0].open).toBe(true);
+		expect(r.decisions[1].open).toBe(false);
 	});
 	it('never throws for malformed arrays or null', () => {
 		for (const v of [null, [], { ...valid(), verify_commands: [null], decisions: [null] }])
