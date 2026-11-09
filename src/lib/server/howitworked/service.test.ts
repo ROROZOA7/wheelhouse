@@ -109,6 +109,24 @@ describe('HowItWorkedService', () => {
 		]);
 	});
 
+	it('keeps each task’s progress on a pooled slot’s transcript apart', async () => {
+		const { projects, home } = await setup();
+		let t = 0;
+		const svc = new HowItWorkedService(
+			[new ClaudeTranscripts(projects, () => (t += 60_000))],
+			home
+		);
+		const a = await svc.read({ ...task, harness: 'claude' });
+		const b = await svc.read({ ...task, id: 'wh-6', branch: 'fm/wh-6', harness: 'claude' });
+		const again = await svc.read({ ...task, harness: 'claude' });
+		expect(a.available && a.events.map((e) => e.line ?? e.name)).toEqual([
+			'read SKILL.md',
+			'npm test'
+		]);
+		expect(b.available && b.events.map((e) => e.line)).toEqual(['old task']);
+		expect(again).toEqual(a);
+	});
+
 	it('says plainly that other harnesses are not readable yet', async () => {
 		const { projects, home } = await setup();
 		const svc = new HowItWorkedService([new ClaudeTranscripts(projects)], home);

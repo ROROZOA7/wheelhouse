@@ -173,7 +173,12 @@ resolve) echo '{"schema":"fm-pack.v1","project":"p","skills":[{"name":"a","kinds
 esac`);
 		const res = await reader(dir).resolve('p');
 		expect(res.ok && res.value.skills[0].kinds).toEqual(['1', 'bug']);
-		expect(res.ok && res.value.readiness.refusals).toEqual(['unknown', { code: 'x' }, 'y']);
-		expect(res.ok && res.value.readiness.warnings).toEqual(['[object Object]']);
+		// A detail that is not text is kept, as text.
+		expect(res.ok && res.value.readiness.refusals).toEqual([
+			'unknown',
+			{ code: 'x', detail: '2' },
+			'y'
+		]);
+		expect(res.ok && res.value.readiness.warnings).toEqual(['{"nope":1}']);
 	});
 });

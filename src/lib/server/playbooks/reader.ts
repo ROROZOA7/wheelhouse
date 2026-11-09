@@ -256,9 +256,23 @@ export const unbound = (project: string): PackResolve => ({
 /** A readiness warning or refusal: text, or {code, detail?}; anything else becomes text. */
 function notice(v: unknown): string | { code: string; detail?: string } {
 	if (typeof v === 'string') return v;
-	if (isRecord(v) && typeof v.code === 'string')
-		return typeof v.detail === 'string' ? { code: v.code, detail: v.detail } : { code: v.code };
-	return String(v ?? 'unknown');
+	if (isRecord(v) && typeof v.code === 'string') {
+		const detail = v.detail === undefined || v.detail === null ? null : plain(v.detail);
+		return detail ? { code: v.code, detail } : { code: v.code };
+	}
+	return v === undefined || v === null ? 'unknown' : plain(v);
+}
+
+/** Any JSON value as short readable text (objects as JSON, never "[object Object]"). */
+function plain(v: unknown): string {
+	if (typeof v === 'string') return v;
+	let t: string;
+	try {
+		t = typeof v === 'object' ? (JSON.stringify(v) ?? String(v)) : String(v);
+	} catch {
+		t = String(v);
+	}
+	return t.length > 200 ? `${t.slice(0, 199)}…` : t;
 }
 
 /** One listed pack with every field the views read filled in. */

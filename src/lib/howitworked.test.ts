@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	conformance,
 	digestDir,
+	MAX_EVENTS,
 	firstLine,
 	mcpName,
 	parseTranscript,
@@ -129,6 +130,23 @@ describe('parseTranscript', () => {
 		expect(t.tokens).toEqual({ input: 100, output: 20, cacheRead: 5 });
 	});
 
+	it('keeps only the latest MAX_EVENTS steps, but counts them all', () => {
+		const many = Array.from({ length: MAX_EVENTS + 50 }, (_, i) =>
+			rec({ s: 1, content: [use(`b${i}`, 'Bash', { command: `cmd ${i}` })] })
+		);
+		const t = parseTranscript(
+			[
+				...many,
+				rec({ s: 2, type: 'user', content: [result(`b${MAX_EVENTS + 49}`, 'Exit code 1', true)] })
+			],
+			opts
+		);
+		expect(t.events).toHaveLength(MAX_EVENTS);
+		expect(t.events.at(-1)!.line).toBe(`cmd ${MAX_EVENTS + 49}`);
+		expect(t.tally.events).toBe(MAX_EVENTS + 50);
+		expect(t.tally.bash).toEqual({ runs: MAX_EVENTS + 50, failed: 1 });
+	});
+
 	it('carries on from an earlier parse, pairing a result that arrives later', () => {
 		const first = parseTranscript(
 			[rec({ s: 1, content: [use('p', 'Bash', { command: 'make' })] })],
@@ -159,7 +177,7 @@ describe('summary and conformance', () => {
 		],
 		opts
 	);
-	const s = summarize(r.events, r.tokens, r.files.size, 1);
+	const s = summarize([r.tally], r.tokens, r.files.size, 1);
 	const pack: RecordedPack = {
 		binding: { pack: 'core', version: '0.1.0', digest: 'sha256:abc' },
 		skills: [
@@ -187,7 +205,9 @@ describe('summary and conformance', () => {
 
 	it('does not count a global skill that shares a pack skill’s bare name', () => {
 		const g = summarize(
-			parseTranscript([rec({ s: 1, content: [use('a', 'Skill', { skill: 'tdd' })] })], opts).events,
+			[
+				parseTranscript([rec({ s: 1, content: [use('a', 'Skill', { skill: 'tdd' })] })], opts).tally
+			],
 			{ input: 0, output: 0, cacheRead: 0 },
 			0,
 			1
