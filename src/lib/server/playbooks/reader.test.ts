@@ -143,4 +143,37 @@ esac`);
 			refusals: ['binding-invalid']
 		});
 	});
+
+	it('reports an fm-pack.sh that is there but cannot be run, never the fixture', async () => {
+		const dir = await firstmate('echo never');
+		await chmod(path.join(dir, 'bin', 'fm-pack.sh'), 0o644);
+		expect(await reader(dir, FIXTURE).source()).toEqual({
+			available: false,
+			reason: expect.stringMatching(/cannot be run/)
+		});
+	});
+
+	it('survives a health listener that throws', async () => {
+		const dir = await firstmate();
+		const r = new PlaybookReader({
+			firstmateDir: dir,
+			homeDir: dir,
+			env: process.env,
+			onchange: () => {
+				throw new Error('boom');
+			}
+		});
+		expect(await r.source()).toMatchObject({ available: false });
+	});
+
+	it('normalises readiness notices and skill kinds', async () => {
+		const dir = await firstmate(`case "$1" in
+version) echo '{"schema":"fm-pack.v1"}' ;;
+resolve) echo '{"schema":"fm-pack.v1","project":"p","skills":[{"name":"a","kinds":[1,"bug"]}],"readiness":{"ok":false,"refusals":[null,{"code":"x","detail":2},"y"],"warnings":[{"nope":1}]}}' ;;
+esac`);
+		const res = await reader(dir).resolve('p');
+		expect(res.ok && res.value.skills[0].kinds).toEqual(['1', 'bug']);
+		expect(res.ok && res.value.readiness.refusals).toEqual(['unknown', { code: 'x' }, 'y']);
+		expect(res.ok && res.value.readiness.warnings).toEqual(['[object Object]']);
+	});
 });

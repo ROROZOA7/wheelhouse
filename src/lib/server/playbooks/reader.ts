@@ -76,7 +76,14 @@ export class PlaybookReader {
 			.then(({ source, retry }) => {
 				const before = this.detected?.source;
 				this.detected = { at: this.now(), source, retry };
-				if (JSON.stringify(before) !== JSON.stringify(source)) this.opts.onchange?.(source);
+				if (JSON.stringify(before) !== JSON.stringify(source)) {
+					// A listener's failure must never break detection.
+					try {
+						this.opts.onchange?.(source);
+					} catch {
+						/* ignored */
+					}
+				}
 				return source;
 			})
 			.finally(() => (this.detecting = null));
@@ -90,11 +97,21 @@ export class PlaybookReader {
 
 	/** Never throws; `retry` marks an answer worth checking again soon. */
 	private async detect(): Promise<Detection> {
-		const exists = await access(this.script, constants.X_OK).then(
+		// Present but not executable is a broken install, shown as one; only absent uses the fixture.
+		const exists = await access(this.script).then(
 			() => true,
 			() => false
 		);
 		if (exists) {
+			const runnable = await access(this.script, constants.X_OK).then(
+				() => true,
+				() => false
+			);
+			if (!runnable)
+				return {
+					source: { available: false, reason: 'bin/fm-pack.sh is there but cannot be run.' },
+					retry: true
+				};
 			// A real fm-pack.sh that fails is shown as failing, never covered by the fixture.
 			const r = await this.run(['version', '--json']);
 			if (!r.ok) return { source: { available: false, reason: r.reason }, retry: true };
@@ -236,6 +253,14 @@ export const unbound = (project: string): PackResolve => ({
 	readiness: { ok: true, note: 'no pack bound', missing: [], warnings: [], refusals: [] }
 });
 
+/** A readiness warning or refusal: text, or {code, detail?}; anything else becomes text. */
+function notice(v: unknown): string | { code: string; detail?: string } {
+	if (typeof v === 'string') return v;
+	if (isRecord(v) && typeof v.code === 'string')
+		return typeof v.detail === 'string' ? { code: v.code, detail: v.detail } : { code: v.code };
+	return String(v ?? 'unknown');
+}
+
 /** One listed pack with every field the views read filled in. */
 function packWithDefaults(raw: unknown): PackListEntry {
 	const p = obj(raw);
@@ -288,6 +313,7 @@ const skillWithDefaults = (raw: unknown): ResolvedSkill => {
 		...(s as unknown as ResolvedSkill),
 		id: String(s.id ?? s.name ?? '?'),
 		name: String(s.name ?? s.id ?? '?'),
+		kinds: arr<unknown>(s.kinds).map(String),
 		phase: (['build', 'verify', 'review', 'task'].includes(s.phase as string)
 			? s.phase
 			: 'task') as ResolvedSkill['phase'],
@@ -340,8 +366,8 @@ function withDefaults(r: PackResolve): PackResolve {
 			...(rd as Partial<PackResolve['readiness']>),
 			ok: rd.ok !== false,
 			missing: arr<unknown>(rd.missing).map(String),
-			warnings: arr<PackResolve['readiness']['warnings'][number]>(rd.warnings),
-			refusals: arr<PackResolve['readiness']['refusals'][number]>(rd.refusals)
+			warnings: arr<unknown>(rd.warnings).map(notice),
+			refusals: arr<unknown>(rd.refusals).map(notice)
 		}
 	};
 }

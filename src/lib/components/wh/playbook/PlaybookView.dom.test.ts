@@ -90,4 +90,17 @@ describe('PlaybookView', () => {
 		);
 		expect(el.querySelector('[data-unbound]')).not.toBeNull();
 	});
+
+	it('renders items whose ids collapsed to the same default', () => {
+		const el = render({
+			...unbound('wheelhouse'),
+			binding: { pack: 'core', version: '0.1.0', digest: '', binding_digest: '' },
+			banned: [
+				{ id: '?', origin: 'pack', delivery: {} },
+				{ id: '?', origin: 'pack', delivery: {} }
+			]
+		});
+		expect(el.querySelectorAll('[data-binding]')).toHaveLength(1);
+		expect(el.textContent?.split('?').length).toBeGreaterThan(2);
+	});
 });

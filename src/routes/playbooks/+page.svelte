@@ -40,7 +40,7 @@
 					<p class="mt-8 text-muted-foreground">No playbooks are installed.</p>
 				{:else if pb.list?.ok}
 					<ul class="mt-8 space-y-4">
-						{#each pb.list.value.packs as p (p.digest)}
+						{#each pb.list.value.packs as p, n (n)}
 							<li class="rounded-xl border p-4" data-pack={p.name}>
 								<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 									<span class="text-lg font-medium">{p.name}</span>
@@ -65,7 +65,7 @@
 								{/if}
 								{#if p.risk.length}
 									<ul class="mt-2 flex flex-wrap gap-2">
-										{#each p.risk as k (k)}
+										{#each p.risk as k, j (j)}
 											<li
 												class="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning"
 											>
@@ -77,7 +77,7 @@
 								<p class="mt-3 text-sm">
 									{#if p.bound_projects.length}
 										Used by
-										{#each p.bound_projects as b, i (b.project)}{i ? ', ' : ''}<a
+										{#each p.bound_projects as b, i (i)}{i ? ', ' : ''}<a
 												href="/projects/{encodeURIComponent(b.project)}/playbook"
 												class="text-sea hover:underline">{b.project}</a
 											>{#if b.digest !== p.digest}<span class="text-xs text-warning">
