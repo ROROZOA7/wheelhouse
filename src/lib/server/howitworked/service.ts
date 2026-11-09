@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import type { HowItWorked, RecordedPack } from '../../howitworked';
+import { digestDir, type HowItWorked, type RecordedPack } from '../../howitworked';
 import type { TaskSession, TranscriptAdapter } from './adapter';
 
 /**
@@ -40,7 +40,7 @@ export class HowItWorkedService {
 		if (!recorded?.binding || !Array.isArray(recorded.skills)) return null;
 		const b = recorded.binding;
 		const packs = path.join(data, '.packs');
-		const dir = b.version ? path.join(packs, b.pack, b.version, b.digest) : null;
+		const dir = b.version ? path.join(packs, b.pack, b.version, digestDir(b.digest)) : null;
 		// Only a directory that really is under data/.packs counts.
 		const real = dir ? await realpath(dir).catch(() => null) : null;
 		const root = await realpath(packs).catch(() => null);

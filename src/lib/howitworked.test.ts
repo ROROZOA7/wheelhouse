@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	conformance,
+	digestDir,
 	firstLine,
 	mcpName,
 	parseTranscript,
@@ -11,7 +12,7 @@ import {
 
 const WT = '/work/slot-3';
 const BR = 'fm/wh-7';
-const PACK = '/home/c/crew/data/.packs/core/0.1.0/sha256:abc';
+const PACK = '/home/c/crew/data/.packs/core/0.1.0/abc';
 const at = (s: number) => new Date(Date.UTC(2026, 10, 8, 10, 0, s)).toISOString();
 
 /** One transcript record, as Claude Code writes it. */
@@ -113,6 +114,35 @@ describe('parseTranscript', () => {
 		expect(r.tokens).toEqual({ input: 100, output: 20, cacheRead: 5 });
 	});
 
+	it('counts a message’s usage once, though each of its content blocks is its own record', () => {
+		const usage = { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5 };
+		const block = (s: number, id: string) =>
+			JSON.stringify({
+				type: 'assistant',
+				timestamp: at(s),
+				cwd: WT,
+				gitBranch: BR,
+				message: { id: 'msg_1', usage, content: [use(id, 'Bash', { command: id })] }
+			});
+		const t = parseTranscript([block(1, 'x'), block(2, 'y'), block(3, 'z')], opts);
+		expect(t.events).toHaveLength(3);
+		expect(t.tokens).toEqual({ input: 100, output: 20, cacheRead: 5 });
+	});
+
+	it('carries on from an earlier parse, pairing a result that arrives later', () => {
+		const first = parseTranscript(
+			[rec({ s: 1, content: [use('p', 'Bash', { command: 'make' })] })],
+			opts
+		);
+		const more = parseTranscript(
+			[rec({ s: 4, type: 'user', content: [result('p', 'Exit code 2', true)] })],
+			opts,
+			first
+		);
+		expect(more.events).toHaveLength(1);
+		expect(more.events[0]).toMatchObject({ ok: false, exit: 2, durationMs: 3000 });
+	});
+
 	it('finds nothing in a transcript from another worktree', () => {
 		expect(parseTranscript([rec({ s: 1, cwd: '/elsewhere', content: [] })], opts).matched).toBe(
 			false
@@ -155,6 +185,23 @@ describe('summary and conformance', () => {
 		expect(c.basis).toMatch(/read its SKILL\.md/);
 	});
 
+	it('does not count a global skill that shares a pack skill’s bare name', () => {
+		const g = summarize(
+			parseTranscript([rec({ s: 1, content: [use('a', 'Skill', { skill: 'tdd' })] })], opts).events,
+			{ input: 0, output: 0, cacheRead: 0 },
+			0,
+			1
+		);
+		const c = conformance(g, pack)!;
+		expect(c.used).toEqual([]);
+		expect(c.unused).toContain('core:tdd');
+		expect(c.outside).toEqual(['tdd']);
+	});
+
+	it('makes no MCP claim when the pack has no mcp list', () => {
+		expect(conformance(s, { binding: pack.binding, skills: pack.skills })!.mcpOutside).toBeNull();
+	});
+
 	it('has nothing to compare without a recorded pack', () => {
 		expect(conformance(s, null)).toBeNull();
 	});
@@ -165,6 +212,10 @@ describe('helpers', () => {
 		expect(firstLine('\n  ls -la\nmore')).toBe('ls -la');
 		expect(firstLine('x'.repeat(300))!.length).toBe(140);
 		expect(firstLine(undefined)).toBeNull();
+	});
+	it('names a pack folder by its bare digest', () => {
+		expect(digestDir('sha256:85641e34')).toBe('85641e34');
+		expect(digestDir('85641e34')).toBe('85641e34');
 	});
 	it('splits MCP tool names', () => {
 		expect(mcpName('mcp__docket__search')).toEqual({ server: 'docket', tool: 'search' });

@@ -92,7 +92,8 @@
 			? taskTabs({
 					preview: !!task.preview,
 					shots: shots.length,
-					how: true,
+					// Only Claude Code sessions can be read (a finished task's worker may be gone: then the server uses the ledger's harness).
+					how: (task.worker?.harness ?? 'claude').toLowerCase() === 'claude',
 					plugins: pluginTabs.map((e) => ({ key: e.key, title: e.title })),
 					build: {
 						// Only what is still waiting on an answer is counted.

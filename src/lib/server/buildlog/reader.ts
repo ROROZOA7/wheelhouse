@@ -108,7 +108,7 @@ async function readTail(file: string, max: number): Promise<string | null> {
 }
 
 /** Bytes from..to of a file, at most the last `max` of them, and where the read ended. */
-async function readRange(
+export async function readRange(
 	file: string,
 	from: number,
 	to: number,

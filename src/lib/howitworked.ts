@@ -4,7 +4,7 @@
  * draws it; the server (server/howitworked/) reads it.
  */
 
-export type WorkEventKind = 'skill' | 'mcp' | 'bash' | 'edit' | 'read' | 'agent' | 'other';
+export type WorkEventKind = 'skill' | 'mcp' | 'bash' | 'edit' | 'agent';
 
 export interface WorkEvent {
 	at: string | null;
@@ -42,8 +42,8 @@ export interface Conformance {
 	unused: string[];
 	/** Skills used that the pack does not list. */
 	outside: string[];
-	/** MCP servers called that the pack does not list (empty when it lists none and gave none). */
-	mcpOutside: string[];
+	/** MCP servers called that the pack does not list; null when the pack makes no MCP claim. */
+	mcpOutside: string[] | null;
 	/** How use is counted: a Read of the skill's SKILL.md (Phase A), or a Skill call (Phase B). */
 	basis: string;
 }
@@ -107,16 +107,37 @@ export interface ParseOptions {
 
 type Pending = { event: WorkEvent; startedAt: number | null };
 
+/** What parsing one transcript has found so far; pass it back to continue with appended lines. */
+export interface ParseState {
+	matched: boolean;
+	events: WorkEvent[];
+	tokens: { input: number; output: number; cacheRead: number };
+	files: Set<string>;
+	pending: Map<string, Pending>;
+	/** Assistant messages already counted: Claude Code writes one record per content block, all with the message's usage. */
+	counted: Set<string>;
+}
+
+export const parseState = (): ParseState => ({
+	matched: false,
+	events: [],
+	tokens: { input: 0, output: 0, cacheRead: 0 },
+	files: new Set(),
+	pending: new Map(),
+	counted: new Set()
+});
+
 /**
  * Parse one transcript's lines into events, keeping only records made in the task's
- * worktree, on its branch, inside its window. Pure: no I/O.
+ * worktree, on its branch, inside its window. Pure: no I/O. Pass `state` to carry on
+ * from an earlier call on the same transcript (only its appended lines).
  */
-export function parseTranscript(lines: Iterable<string>, o: ParseOptions) {
-	const events: WorkEvent[] = [];
-	const tokens = { input: 0, output: 0, cacheRead: 0 };
-	const pending = new Map<string, Pending>();
-	const files = new Set<string>();
-	let matched = false;
+export function parseTranscript(
+	lines: Iterable<string>,
+	o: ParseOptions,
+	state: ParseState = parseState()
+): ParseState {
+	const { events, tokens, pending, files, counted } = state;
 	const root = o.worktree.endsWith('/') ? o.worktree : `${o.worktree}/`;
 	for (const line of lines) {
 		if (!line.includes(o.branch)) continue;
@@ -134,10 +155,12 @@ export function parseTranscript(lines: Iterable<string>, o: ParseOptions) {
 			if (o.since !== null && ts < o.since) continue;
 			if (o.until !== null && ts > o.until) continue;
 		}
-		matched = true;
+		state.matched = true;
 		const at = Number.isNaN(ts) ? null : new Date(ts).toISOString();
 		const msg = (rec.message ?? {}) as { content?: unknown; usage?: Record<string, unknown> };
-		if (rec.type === 'assistant' && msg.usage) {
+		const msgId = str((msg as { id?: unknown }).id) ?? str(rec.requestId);
+		if (rec.type === 'assistant' && msg.usage && !(msgId && counted.has(msgId))) {
+			if (msgId) counted.add(msgId);
 			tokens.input += num(msg.usage.input_tokens);
 			tokens.output += num(msg.usage.output_tokens);
 			tokens.cacheRead += num(msg.usage.cache_read_input_tokens);
@@ -162,8 +185,10 @@ export function parseTranscript(lines: Iterable<string>, o: ParseOptions) {
 			}
 		}
 	}
-	return { matched, events, tokens, files };
+	return state;
 }
+
+const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
 
 function toolEvent(
 	name: string,
@@ -252,6 +277,12 @@ export function summarize(
 	return s;
 }
 
+/**
+ * A pack's install folder name for a digest: fm-pack installs under the bare hex
+ * (data/.packs/<name>/<version>/<hex>/), while JSON digests keep the `sha256:` prefix.
+ */
+export const digestDir = (digest: string) => digest.replace(/^sha256:/i, '');
+
 /** The pack a task was spawned with, as data/<task>/pack.json records it (resolve output, frozen). */
 export interface RecordedPack {
 	binding: { pack: string; version?: string; digest: string } | null;
@@ -267,18 +298,19 @@ export function conformance(
 ): Conformance | null {
 	if (!pack?.binding) return null;
 	const given = new Set(pack.skills.filter((s) => s.state !== 'disabled').map((s) => s.name));
-	const ns = `${pack.binding.pack}:`;
-	const bare = (n: string) => (n.startsWith(ns) ? n : `${ns}${n}`);
+	// Only exact pack names count (a Read of the pack's SKILL.md is named `<pack>:<skill>`):
+	// a global skill that shares a pack skill's bare name is not the pack's.
 	const used = Object.keys(summary.skills);
-	const usedPack = new Set(used.map(bare).filter((n) => given.has(n)));
+	const usedPack = new Set(used.filter((n) => given.has(n)));
 	const servers = new Set(Object.keys(summary.mcp).map((k) => k.split('/')[0]));
-	const allowed = new Set((pack.mcp ?? []).map((m) => m.id));
+	// No `mcp` list means the pack says nothing about MCP, not that it allows none.
+	const allowed = Array.isArray(pack.mcp) ? new Set(pack.mcp.map((m) => m.id)) : null;
 	return {
 		pack: `${pack.binding.pack}${pack.binding.version ? `@${pack.binding.version}` : ''}`,
 		used: [...usedPack].sort(),
 		unused: [...given].filter((n) => !usedPack.has(n)).sort(),
-		outside: used.filter((n) => !given.has(bare(n))).sort(),
-		mcpOutside: [...servers].filter((s) => !allowed.has(s)).sort(),
+		outside: used.filter((n) => !given.has(n)).sort(),
+		mcpOutside: allowed ? [...servers].filter((s) => !allowed.has(s)).sort() : null,
 		basis:
 			phase === 'A'
 				? 'A skill counts as used when the session read its SKILL.md from the pack.'

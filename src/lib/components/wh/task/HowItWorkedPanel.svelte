@@ -13,19 +13,21 @@
 	let { taskId, shown }: { taskId: string; shown: boolean } = $props();
 
 	let data = $state<{ id: string; value: HowItWorked } | null>(null);
-	let failed = $state<string | null>(null);
+	let failedFor = $state<string | null>(null);
+	const failed = $derived(failedFor === taskId ? 'Could not read how this worker worked.' : null);
 	const how = $derived(data?.id === taskId ? data.value : null);
 
 	$effect(() => {
 		if (!shown || data?.id === taskId) return;
 		const want = taskId;
-		failed = null;
 		fetch(`/api/tasks/${encodeURIComponent(want)}/how`)
 			.then(async (r) => (r.ok ? ((await r.json()) as HowItWorked) : Promise.reject(r.status)))
 			.then((v) => {
 				if (want === taskId) data = { id: want, value: v };
 			})
-			.catch(() => (failed = 'Could not read how this worker worked.'));
+			.catch(() => {
+				if (want === taskId) failedFor = want;
+			});
 	});
 
 	const ICON: Record<WorkEventKind, Component> = {
@@ -33,12 +35,9 @@
 		mcp: Plug,
 		bash: SquareTerminal,
 		edit: FilePen,
-		read: FilePen,
-		agent: Bot,
-		other: SquareTerminal
+		agent: Bot
 	};
 	const failedEvent = (e: WorkEvent) => e.ok === false || (e.exit !== null && e.exit !== 0);
-	const ms = (n: number | null) => (n === null ? '' : n < 1000 ? `${n} ms` : duration(n / 1000));
 	const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
 </script>
 
@@ -122,7 +121,7 @@
 								>{/each}
 						</li>
 					{/if}
-					{#if c.mcpOutside.length}
+					{#if c.mcpOutside?.length}
 						<li data-mcp-outside>
 							MCP servers called, not in its playbook: {c.mcpOutside.join(', ')}
 						</li>
@@ -166,7 +165,7 @@
 							{#if e.durationMs !== null && e.durationMs >= 1000}<span
 									class="text-xs text-muted-foreground"
 								>
-									· {ms(e.durationMs)}</span
+									· {duration(e.durationMs / 1000)}</span
 								>{/if}
 						</span>
 					</li>

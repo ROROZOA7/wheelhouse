@@ -1,14 +1,16 @@
-import { open, readdir, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	conformance,
 	MAX_EVENTS,
+	parseState,
 	parseTranscript,
 	summarize,
+	type ParseState,
 	type HowItWorked,
 	type WorkEvent
 } from '../../howitworked';
-import { transcriptDirName } from '../buildlog/reader';
+import { readRange, transcriptDirName } from '../buildlog/reader';
 import type { TaskSession, TranscriptAdapter } from './adapter';
 
 /**
@@ -19,12 +21,26 @@ import type { TaskSession, TranscriptAdapter } from './adapter';
  */
 
 const MAX_FILES = 30;
+/** The most read from one transcript the first time it is seen (its tail); later reads take only what was appended. */
 const MAX_BYTES = 16 * 1024 * 1024;
 const CACHE_MS = 15_000;
+/** Bounds on what is kept between reads: results by task, and parse progress by transcript. */
+const MAX_RESULTS = 100;
+const MAX_PARSED = 300;
+
+type Parsed = { key: string; size: number; state: ParseState };
+
+/** A Map used as a small LRU: set() moves a key to the end, and the oldest go past `max`. */
+function remember<K, V>(map: Map<K, V>, key: K, value: V, max: number) {
+	map.delete(key);
+	map.set(key, value);
+	while (map.size > max) map.delete(map.keys().next().value!);
+}
 
 export class ClaudeTranscripts implements TranscriptAdapter {
 	readonly harness = 'claude';
 	private cache = new Map<string, { at: number; value: HowItWorked }>();
+	private parsed = new Map<string, Parsed>();
 
 	constructor(
 		private projectsDir: string | null,
@@ -39,15 +55,50 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 				available: false,
 				reason: 'The task’s worktree is not recorded, so its session cannot be matched.'
 			};
-		const key = `${t.id} ${t.until ?? ''}`;
+		const key = `${t.id} ${t.worktree} ${t.until ?? ''}`;
 		const hit = this.cache.get(key);
 		if (hit && this.now() - hit.at < CACHE_MS) return hit.value;
 		const value = await this.load(t, t.worktree).catch((): HowItWorked => ({
 			available: false,
 			reason: 'The session’s transcripts could not be read.'
 		}));
-		this.cache.set(key, { at: this.now(), value });
+		remember(this.cache, key, { at: this.now(), value }, MAX_RESULTS);
 		return value;
+	}
+
+	/**
+	 * One transcript parsed for this task. Transcripts only grow, so a file read before
+	 * for the same task is carried on from where that read ended (a cut last line is read again).
+	 */
+	private async parse(file: string, size: number, t: TaskSession, worktree: string) {
+		const dirs = packDirs(t);
+		const key = JSON.stringify([t.id, worktree, t.branch, t.since, t.until, dirs]);
+		let p = this.parsed.get(file);
+		if (!p || p.key !== key || p.size > size) p = { key, size: 0, state: parseState() };
+		if (p.size < size) {
+			const read = await readRange(file, p.size, size, MAX_BYTES);
+			if (!read) return p.state;
+			let text = read.text;
+			// A read that had to skip ahead starts mid-line: drop the cut line.
+			if (size - p.size > MAX_BYTES) text = text.slice(text.indexOf('\n') + 1);
+			const lines = text.split('\n');
+			const partial = text.endsWith('\n') ? '' : (lines.pop() ?? '');
+			parseTranscript(
+				lines,
+				{
+					worktree,
+					branch: t.branch,
+					since: t.since,
+					until: t.until,
+					packDirs: dirs,
+					packName: t.pack?.recorded.binding?.pack ?? null
+				},
+				p.state
+			);
+			p = { key, size: read.end - Buffer.byteLength(partial), state: p.state };
+		}
+		remember(this.parsed, file, p, MAX_PARSED);
+		return p.state;
 	}
 
 	private async load(t: TaskSession, worktree: string): Promise<HowItWorked> {
@@ -67,24 +118,16 @@ export class ClaudeTranscripts implements TranscriptAdapter {
 			.filter((x): x is NonNullable<typeof x> => !!x)
 			.sort((a, b) => a.st.mtimeMs - b.st.mtimeMs)
 			.slice(-MAX_FILES);
-		const packName = t.pack?.recorded.binding?.pack ?? null;
 		let events: WorkEvent[] = [];
 		const tokens = { input: 0, output: 0, cacheRead: 0 };
 		const changed = new Set<string>();
 		let sessions = 0;
 		for (const { n, st } of files) {
-			const text = await readTail(path.join(dir, n), st.size, MAX_BYTES);
-			const r = parseTranscript(text.split('\n'), {
-				worktree,
-				branch: t.branch,
-				since: t.since,
-				until: t.until,
-				packDirs: packDirs(t),
-				packName
-			});
+			const r = await this.parse(path.join(dir, n), st.size, t, worktree);
 			if (!r.matched) continue;
 			sessions++;
-			events.push(...r.events);
+			// Copies: the parse state is kept and carried on by later reads.
+			events.push(...r.events.map((e) => ({ ...e })));
 			tokens.input += r.tokens.input;
 			tokens.output += r.tokens.output;
 			tokens.cacheRead += r.tokens.cacheRead;
@@ -120,18 +163,4 @@ function packDirs(t: TaskSession): string[] {
 		if (s.path && i > 0) dirs.add(s.path.slice(0, i));
 	}
 	return [...dirs];
-}
-
-/** The last `max` bytes of a file (a cut first line is dropped). */
-async function readTail(file: string, size: number, max: number): Promise<string> {
-	const start = Math.max(0, size - max);
-	const fh = await open(file, 'r');
-	try {
-		const buf = Buffer.alloc(size - start);
-		const { bytesRead } = await fh.read(buf, 0, size - start, start);
-		const text = buf.subarray(0, bytesRead).toString('utf8');
-		return start ? text.slice(text.indexOf('\n') + 1) : text;
-	} finally {
-		await fh.close();
-	}
 }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ async function setup() {
 	const root = await mkdtemp(path.join(os.tmpdir(), 'wh-how-'));
 	const projects = path.join(root, 'projects');
 	const home = path.join(root, 'home');
-	const packDir = path.join(home, 'data', '.packs', 'core', '0.1.0', 'sha256:abc');
+	const packDir = path.join(home, 'data', '.packs', 'core', '0.1.0', 'abc');
 	await mkdir(path.join(projects, transcriptDirName(WT)), { recursive: true });
 	await mkdir(path.join(packDir, 'skills', 'tdd'), { recursive: true });
 	await mkdir(path.join(home, 'data', 'wh-7'), { recursive: true });
@@ -78,6 +78,35 @@ describe('HowItWorkedService', () => {
 		expect(r.events.map((e) => e.line ?? e.name)).toEqual(['read SKILL.md', 'npm test']);
 		expect(r.summary.sessions).toBe(1);
 		expect(r.conformance).toMatchObject({ used: ['core:tdd'], unused: ['core:implement'] });
+	});
+
+	it('reads only what was appended to a transcript since the last read', async () => {
+		const { projects, home } = await setup();
+		let t = 0;
+		const svc = new HowItWorkedService(
+			[new ClaudeTranscripts(projects, () => (t += 60_000))],
+			home
+		);
+		const first = await svc.read({ ...task, harness: 'claude' });
+		expect(first.available && first.events.length).toBe(2);
+		await appendFile(
+			path.join(projects, transcriptDirName(WT), 's1.jsonl'),
+			JSON.stringify({
+				type: 'assistant',
+				timestamp: '2026-11-08T10:00:04Z',
+				cwd: WT,
+				gitBranch: 'fm/wh-7',
+				message: {
+					content: [{ type: 'tool_use', id: 'd', name: 'Bash', input: { command: 'npm run lint' } }]
+				}
+			}) + '\n'
+		);
+		const next = await svc.read({ ...task, harness: 'claude' });
+		expect(next.available && next.events.map((e) => e.line ?? e.name)).toEqual([
+			'read SKILL.md',
+			'npm test',
+			'npm run lint'
+		]);
 	});
 
 	it('says plainly that other harnesses are not readable yet', async () => {
