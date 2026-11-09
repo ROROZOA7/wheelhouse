@@ -22,6 +22,21 @@ describe('LedgerReader', () => {
 		expect(l.state().reason).toMatch(/off/);
 	});
 
+	it('says how to turn the ledger on when the flag is not set', async () => {
+		const l = new LedgerReader(file, path.join(dir, 'fleet-ledger'));
+		await l.poll();
+		expect(l.state().reason).toMatch(/off.*config\/fleet-ledger/s);
+	});
+
+	it('tells an enabled but still empty ledger apart from one that is off', async () => {
+		const flag = path.join(dir, 'fleet-ledger');
+		writeFileSync(flag, '');
+		const l = new LedgerReader(file, flag);
+		await l.poll();
+		expect(l.state().available).toBe(false);
+		expect(l.state().reason).toMatch(/on but has recorded nothing yet/);
+	});
+
 	it('reads appended records incrementally, ignoring unknown events and members', async () => {
 		writeFileSync(
 			file,

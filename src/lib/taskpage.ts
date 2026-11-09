@@ -83,3 +83,18 @@ export function stepGist(
 	}
 	return parts.length ? parts.join(' · ') : s.note;
 }
+
+/** A screenshot the worker saved for a task. */
+export type TaskShot = Extract<TaskEvidence['screenshots'], { available: true }>['value'][number];
+
+/** A pull request's state in plain words. */
+export const prState = (s: string | null, draft: boolean | null) =>
+	draft
+		? 'draft'
+		: s === 'merged'
+			? 'merged'
+			: s === 'closed'
+				? 'closed'
+				: s === 'open'
+					? 'open'
+					: (s ?? 'state unknown');

@@ -189,7 +189,10 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		install,
 		version,
 		evidence,
-		ledger: new LedgerReader(path.join(install.homeDir, 'state', 'fleet-ledger.jsonl')),
+		ledger: new LedgerReader(
+			path.join(install.homeDir, 'state', 'fleet-ledger.jsonl'),
+			path.join(install.homeDir, 'config', 'fleet-ledger')
+		),
 		registry: async (dataDir) =>
 			parseProjectsRegistry(await readFile(path.join(dataDir, 'projects.md'), 'utf8')),
 		messenger: messaging.messenger,
