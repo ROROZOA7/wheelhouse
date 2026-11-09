@@ -247,6 +247,39 @@ Definition of done adds: run every verify command at your final head and record 
 - The top-level `head_sha` must equal the `done:` head.
 - For a command that couldn't run, use `exit:null` plus a `skipped_reason`. Never a fake 0.
 - `skills_used` is a claim and is never trusted.
+
+**Field rules** (added after the 2026-11-09 pilot, whose worker wrote a non-conforming file):
+- **Top level.**
+  - Required: `schema` (= `fm-evidence.v1`), `task`, `pack`, `head_sha`, `verify_commands[]` and `decisions[]`.
+  - A missing `base_sha` or `skills_used` is a warning.
+  - `screenshots` and `review_findings` are optional.
+  - Unknown fields are ignored.
+- **`verify_commands[]`.**
+  - Required: `id`, `cmd` and `exit` (int or null).
+  - `exit:null` needs a non-empty `skipped_reason`.
+  - A `skipped_reason` beside a non-null `exit` is a problem.
+  - A missing `head_sha`, `base_sha` or `log_path` is a warning.
+  - `log_path` must stay inside `data/<task>/`.
+- **`decisions[]`.** Each entry needs a known `rung`, plus `choice` and `why`.
+
+**`fm-pack.sh evidence-check <task> --json`** (read-only) →
+`{schema:"fm-pack.v1", task, ok, problems:[{code, path, detail}], warnings:[…]}`
+- Codes:
+  - `evidence-missing`, `evidence-unreadable`
+  - `schema-mismatch`, `field-missing`, `field-type`
+  - `head-mismatch` (`head_sha` ≠ the task's `done:` head)
+  - `verify-missing` (a verify id in `pack.json` has no entry)
+  - `skipped-without-reason`, `reason-with-exit`
+  - `log-path-unsafe`, `rung-unknown`
+- Wheelhouse prefers this checker. When the checker is absent or unsupported, it falls back to the same rules locally and labels the source.
+- A checker failure is shown, never hidden.
+
+## 5a. Pilot follow-ups (fm-pack.v1 additions)
+- **`resolve --task`** adds `drift_reasons: ["pack"|"binding"|"origin"]`. `origin` means the frozen `pack.json` origin commit differs from the current origin commit.
+- **Binding `setup_commands`:**
+  - Optional, captain-owned `[{id, cmd}]`, for example `npm ci`.
+  - Validated like `verify_commands`: single-line, binding only. Repo narrowing can never add to it.
+  - render-brief tells the worker to run them before the verify commands, and that doing so is authorized.
 - `rung` ∈ `intent|repo-precedent|smallest-blast-radius|human-gate`. Every rung's decision is recorded. An open human gate has `choice` = the gate key and `why` starting `UNRESOLVED:`. When it is answered, the worker adds a settled entry and does not edit the open one. Consumers never present open entries as settled.
 
 ## 6. fm-ready.v1 (later)
