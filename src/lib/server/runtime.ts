@@ -191,7 +191,9 @@ async function create(env: NodeJS.ProcessEnv): Promise<Runtime> {
 		firstmateDir: install.firstmateDir,
 		homeDir: install.homeDir,
 		env,
-		fixtureDir: env.WHEELHOUSE_PLAYBOOK_FIXTURE || null
+		fixtureDir: env.WHEELHOUSE_PLAYBOOK_FIXTURE || null,
+		// Health carries the answer; send it again as soon as it changes.
+		onchange: () => collector.healthChanged()
 	});
 	void playbooks.source();
 	const bell = new ShipsBell();
@@ -1049,7 +1051,7 @@ export async function currentInbox(): Promise<InboxView> {
 	return r.configured ? r.inbox.view() : unavailableInbox(r.error);
 }
 
-/** Firstmate's playbooks for the catalog and a project's Playbook tab; read-only. */
+/** Firstmate's playbooks: the pack list for the catalog (no project), or one project's resolve; read-only. */
 export async function currentPlaybooks(project: string | null): Promise<PlaybooksView> {
 	const r = await getRuntime();
 	if (!r.configured) {
@@ -1063,9 +1065,9 @@ export async function currentPlaybooks(project: string | null): Promise<Playbook
 	const source = await r.playbooks.source();
 	if (!source.available)
 		return { schema: 'wheelhouse-playbooks.v1', source, list: null, resolve: null };
-	const [list, resolve] = await Promise.all([
-		r.playbooks.list(),
-		project ? r.playbooks.resolve(project) : Promise.resolve(null)
-	]);
+	// The catalog lists the packs; a project's tab needs only its own resolve.
+	const [list, resolve] = project
+		? [null, await r.playbooks.resolve(project)]
+		: [await r.playbooks.list(), null];
 	return { schema: 'wheelhouse-playbooks.v1', source, list, resolve };
 }

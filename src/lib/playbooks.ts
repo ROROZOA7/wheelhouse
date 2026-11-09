@@ -144,7 +144,8 @@ export function matrixRows(
 /** A digest shortened for display: `sha256:abcdef123456`. */
 export const shortDigest = (d: string) => d.replace(/^(sha256:)?([0-9a-f]{12})[0-9a-f]+$/i, '$1$2');
 
-type Read<T> = { ok: true; value: T } | { ok: false; reason: string };
+/** A read that worked, or why it did not. */
+export type Read<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 /** GET /api/playbooks: the catalog, and one project's resolved playbook when asked. */
 export interface PlaybooksView {

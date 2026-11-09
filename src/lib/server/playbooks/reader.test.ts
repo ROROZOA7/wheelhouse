@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -61,8 +61,86 @@ esac`);
 		expect(await r.source()).toMatchObject({ available: false });
 	});
 
-	it('never passes a project id that is not one', async () => {
-		const res = await reader(await firstmate(), FIXTURE).resolve('../etc');
-		expect(res).toEqual({ ok: false, reason: 'Not a project id.' });
+	it('never passes a project id that is not one, or one that reads as an option', async () => {
+		const r = reader(await firstmate(), FIXTURE);
+		expect(await r.resolve('../etc')).toEqual({ ok: false, reason: 'Not a project id.' });
+		expect(await r.resolve('--help')).toEqual({ ok: false, reason: 'Not a project id.' });
+		expect(await r.resolve('-x')).toEqual({ ok: false, reason: 'Not a project id.' });
+	});
+
+	it('runs fm-pack.sh once for callers at the same time', async () => {
+		const dir = await firstmate(`echo x >> "$FM_HOME/calls"
+case "$1" in
+version) echo '{"schema":"fm-pack.v1","phase":"A"}' ;;
+list) echo '{"schema":"fm-pack.v1","packs":[]}' ;;
+esac`);
+		const r = reader(dir);
+		await Promise.all([r.source(), r.source(), r.source()]);
+		await Promise.all([r.list(), r.list(), r.list()]);
+		const calls = (await readFile(path.join(dir, 'calls'), 'utf8')).trim().split('\n');
+		expect(calls).toHaveLength(2);
+	});
+
+	it('never throws on output that is JSON but not an object', async () => {
+		const r = reader(await firstmate(`echo null`));
+		expect(await r.source()).toMatchObject({ available: false });
+	});
+
+	it('shows a failing fm-pack.sh as failing, not the fixture, and tries again soon', async () => {
+		let t = 0;
+		const dir = await firstmate(`exit 1`);
+		const r = new PlaybookReader({
+			firstmateDir: dir,
+			homeDir: dir,
+			env: process.env,
+			fixtureDir: FIXTURE,
+			now: () => t
+		});
+		expect(await r.source()).toEqual({
+			available: false,
+			reason: expect.stringMatching(/version failed/)
+		});
+		await writeFile(
+			path.join(dir, 'bin', 'fm-pack.sh'),
+			`#!/bin/sh\necho '{"schema":"fm-pack.v1","phase":"A"}'\n`
+		);
+		t += 2 * 60_000;
+		expect(await r.source()).toMatchObject({ available: true, source: 'fm-pack' });
+	});
+
+	it('tells health when detection changes its answer', async () => {
+		const seen: unknown[] = [];
+		const dir = await firstmate();
+		const r = new PlaybookReader({
+			firstmateDir: dir,
+			homeDir: dir,
+			env: process.env,
+			onchange: (s) => seen.push(s)
+		});
+		await r.source();
+		expect(seen).toHaveLength(1);
+	});
+
+	it('fills missing per-item fields so a partial answer still renders', async () => {
+		const dir = await firstmate(`case "$1" in
+version) echo '{"schema":"fm-pack.v1"}' ;;
+list) echo '{"schema":"fm-pack.v1","packs":[{"name":"core","version":"0.1.0","digest":"sha256:ab"}]}' ;;
+resolve) echo '{"schema":"fm-pack.v1","project":"p","binding":null,"skills":[{"id":"tdd","name":"core:tdd","phase":"task"}],"hooks":[{"id":"h"}],"readiness":{"ok":false,"refusals":["binding-invalid"]}}' ;;
+esac`);
+		const r = reader(dir);
+		const list = await r.list();
+		expect(list.ok && list.value.packs[0]).toMatchObject({
+			risk: [],
+			bound_projects: [],
+			source: null,
+			contents: { skills: 0, hooks: 0, mcp: 0 }
+		});
+		const res = await r.resolve('p');
+		expect(res.ok && res.value.skills[0].delivery).toEqual({});
+		expect(res.ok && res.value.hooks[0].delivery).toEqual({});
+		expect(res.ok && res.value.readiness).toMatchObject({
+			ok: false,
+			refusals: ['binding-invalid']
+		});
 	});
 });

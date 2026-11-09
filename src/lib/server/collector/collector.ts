@@ -457,6 +457,11 @@ export class Collector {
 		return { available: true, onWatch, reason, observedAt: r.observedAt, posture: r.posture };
 	}
 
+	/** Send health again now (e.g. when playbook detection changes its answer). */
+	healthChanged(): void {
+		this.emit({ type: 'health', data: this.health() });
+	}
+
 	health(): Health {
 		const c = this.opts.compatibility;
 		const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());

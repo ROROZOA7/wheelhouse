@@ -37,6 +37,27 @@
 	</p>
 {/if}
 
+<!-- Refusals show whether or not a binding is present: an invalid binding is one. -->
+{#if !r.readiness.ok || r.readiness.refusals.length || r.readiness.missing.length}
+	<div class="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm" data-readiness="refused">
+		<p class="flex items-center gap-2 font-medium text-danger">
+			<CircleAlert class="size-4" aria-hidden="true" />{r.binding
+				? 'Firstmate will not start workers with this playbook'
+				: 'Firstmate refuses this project’s playbook binding'}
+		</p>
+		<ul class="mt-1 list-disc pl-5 text-muted-foreground">
+			{#each r.readiness.refusals as x, i (i)}<li>{codeOf(x)}</li>{/each}
+			{#each r.readiness.missing as m (m)}<li>Missing skill: {m}</li>{/each}
+		</ul>
+	</div>
+{/if}
+
+{#if r.readiness.warnings.length}
+	<ul class="mb-4 list-disc pl-5 text-sm text-warning" data-readiness="warnings">
+		{#each r.readiness.warnings as w, i (i)}<li>{codeOf(w)}</li>{/each}
+	</ul>
+{/if}
+
 {#if !r.binding}
 	<p class="text-muted-foreground" data-unbound>
 		No playbook is bound to this project. Its workers get whatever their global and project
@@ -50,24 +71,6 @@
 			>{shortDigest(r.binding.digest)}</code
 		>
 	</div>
-
-	{#if !r.readiness.ok || r.readiness.refusals.length || r.readiness.missing.length}
-		<div class="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-sm" data-readiness="refused">
-			<p class="flex items-center gap-2 font-medium text-danger">
-				<CircleAlert class="size-4" aria-hidden="true" />Firstmate will not start workers with this
-				playbook
-			</p>
-			<ul class="mt-1 list-disc pl-5 text-muted-foreground">
-				{#each r.readiness.refusals as x, i (i)}<li>{codeOf(x)}</li>{/each}
-				{#each r.readiness.missing as m (m)}<li>Missing skill: {m}</li>{/each}
-			</ul>
-		</div>
-	{/if}
-	{#if r.readiness.warnings.length}
-		<ul class="mt-3 list-disc pl-5 text-sm text-warning" data-readiness="warnings">
-			{#each r.readiness.warnings as w, i (i)}<li>{codeOf(w)}</li>{/each}
-		</ul>
-	{/if}
 
 	<section class="mt-8" aria-labelledby="pb-skills">
 		<h2 id="pb-skills" class="text-sm font-medium">Skills</h2>

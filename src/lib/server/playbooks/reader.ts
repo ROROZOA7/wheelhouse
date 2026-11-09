@@ -2,7 +2,15 @@ import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from '../firstmate/exec';
-import type { PackList, PackResolve, PlaybooksSource } from '../../playbooks';
+import type {
+	PackList,
+	PackListEntry,
+	PackResolve,
+	PlaybooksSource,
+	Read,
+	ResolvedItem,
+	ResolvedSkill
+} from '../../playbooks';
 
 /**
  * Reads Firstmate's playbooks through `bin/fm-pack.sh` (fm-pack.v1), read-only:
@@ -17,11 +25,15 @@ import type { PackList, PackResolve, PlaybooksSource } from '../../playbooks';
  */
 
 const RECHECK_MS = 10 * 60_000;
+/** A failed check (the script there but failing) is tried again sooner. */
+const RETRY_MS = 60_000;
 const TIMEOUT_MS = 8_000;
 const MAX_OUTPUT = 2 * 1024 * 1024;
 /** Lists and resolves are cached briefly; packs change only when the captain applies one. */
 const CACHE_MS = 30_000;
-const PROJECT = /^[A-Za-z0-9._-]{1,100}$/;
+// Starts with a letter or digit, so fm-pack.sh can never read the id as an option
+// (its parser has no `--` end-of-options marker).
+const PROJECT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 export interface PlaybookReaderOptions {
 	firstmateDir: string;
@@ -30,13 +42,17 @@ export interface PlaybookReaderOptions {
 	/** A fixture directory (list.json, resolve-<project>.json); null for none. */
 	fixtureDir?: string | null;
 	now?: () => number;
+	/** Called when a detection finishes with a different answer (so health can be re-sent). */
+	onchange?: (source: PlaybooksSource) => void;
 }
 
-export type Read<T> = { ok: true; value: T } | { ok: false; reason: string };
+export type { Read };
 
 export class PlaybookReader {
-	private detected: { at: number; source: PlaybooksSource } | null = null;
+	private detected: { at: number; source: PlaybooksSource; retry: boolean } | null = null;
+	private detecting: Promise<PlaybooksSource> | null = null;
 	private cache = new Map<string, { at: number; value: Read<unknown> }>();
+	private loading = new Map<string, Promise<Read<unknown>>>();
 	private now: () => number;
 
 	constructor(private opts: PlaybookReaderOptions) {
@@ -49,10 +65,22 @@ export class PlaybookReader {
 
 	/** Whether playbooks can be shown, and from where. Never throws. */
 	async source(): Promise<PlaybooksSource> {
-		if (this.detected && this.now() - this.detected.at < RECHECK_MS) return this.detected.source;
-		const source = await this.detect();
-		this.detected = { at: this.now(), source };
-		return source;
+		const d = this.detected;
+		if (d && this.now() - d.at < (d.retry ? RETRY_MS : RECHECK_MS)) return d.source;
+		// Callers at the same time share one run of the script.
+		this.detecting ??= this.detect()
+			.catch((): Detection => ({
+				source: { available: false, reason: 'Checking for playbooks failed.' },
+				retry: true
+			}))
+			.then(({ source, retry }) => {
+				const before = this.detected?.source;
+				this.detected = { at: this.now(), source, retry };
+				if (JSON.stringify(before) !== JSON.stringify(source)) this.opts.onchange?.(source);
+				return source;
+			})
+			.finally(() => (this.detecting = null));
+		return this.detecting;
 	}
 
 	/** The last detection without waiting (null before the first). */
@@ -60,37 +88,46 @@ export class PlaybookReader {
 		return this.detected?.source ?? null;
 	}
 
-	private async detect(): Promise<PlaybooksSource> {
+	/** Never throws; `retry` marks an answer worth checking again soon. */
+	private async detect(): Promise<Detection> {
 		const exists = await access(this.script, constants.X_OK).then(
 			() => true,
 			() => false
 		);
 		if (exists) {
+			// A real fm-pack.sh that fails is shown as failing, never covered by the fixture.
 			const r = await this.run(['version', '--json']);
-			if (r.ok) {
-				const v = r.value as { schema?: unknown; contracts?: unknown; phase?: unknown };
-				const contracts = Array.isArray(v.contracts) ? v.contracts : [];
-				if (v.schema === 'fm-pack.v1' || contracts.includes('fm-pack.v1')) {
-					return {
+			if (!r.ok) return { source: { available: false, reason: r.reason }, retry: true };
+			const v = isRecord(r.value) ? r.value : {};
+			const contracts = Array.isArray(v.contracts) ? v.contracts : [];
+			if (v.schema === 'fm-pack.v1' || contracts.includes('fm-pack.v1')) {
+				return {
+					source: {
 						available: true,
 						source: 'fm-pack',
 						phase: v.phase === 'A' || v.phase === 'B' ? v.phase : null
-					};
-				}
-				return { available: false, reason: 'fm-pack.sh does not report the fm-pack.v1 contract.' };
+					},
+					retry: false
+				};
 			}
-			if (!this.opts.fixtureDir) return { available: false, reason: r.reason };
+			return {
+				source: { available: false, reason: 'fm-pack.sh does not report the fm-pack.v1 contract.' },
+				retry: false
+			};
 		}
 		if (this.opts.fixtureDir) {
 			const ok = await access(path.join(this.opts.fixtureDir, 'list.json')).then(
 				() => true,
 				() => false
 			);
-			if (ok) return { available: true, source: 'fixture', phase: 'A' };
+			if (ok) return { source: { available: true, source: 'fixture', phase: 'A' }, retry: false };
 		}
 		return {
-			available: false,
-			reason: 'This Firstmate has no playbooks (bin/fm-pack.sh is absent).'
+			source: {
+				available: false,
+				reason: 'This Firstmate has no playbooks (bin/fm-pack.sh is absent).'
+			},
+			retry: false
 		};
 	}
 
@@ -102,8 +139,8 @@ export class PlaybookReader {
 				src.source === 'fixture'
 					? await this.fixture('list.json')
 					: await this.run(['list', '--json']);
-			return r.ok && isSchema(r.value) && Array.isArray((r.value as PackList).packs)
-				? { ok: true, value: r.value as PackList }
+			return r.ok && isSchema(r.value) && Array.isArray(r.value.packs)
+				? { ok: true, value: listWithDefaults(r.value as unknown as PackList) }
 				: { ok: false, reason: r.ok ? 'fm-pack.sh list gave an unexpected answer.' : r.reason };
 		});
 	}
@@ -117,18 +154,29 @@ export class PlaybookReader {
 				src.source === 'fixture'
 					? await this.fixture(`resolve-${project}.json`, unbound(project))
 					: await this.run(['resolve', project, '--json']);
-			return r.ok && isSchema(r.value) && Array.isArray((r.value as PackResolve).skills)
-				? { ok: true, value: withDefaults(r.value as PackResolve) }
+			return r.ok && isSchema(r.value) && Array.isArray(r.value.skills)
+				? { ok: true, value: withDefaults(r.value as unknown as PackResolve) }
 				: { ok: false, reason: r.ok ? 'fm-pack.sh resolve gave an unexpected answer.' : r.reason };
 		});
 	}
 
+	/** Cached briefly (a failure is not kept), and callers at the same time share one load. */
 	private async cached<T>(key: string, load: () => Promise<Read<T>>): Promise<Read<T>> {
 		const hit = this.cache.get(key);
 		if (hit && this.now() - hit.at < CACHE_MS) return hit.value as Read<T>;
-		const value = await load();
-		this.cache.set(key, { at: this.now(), value });
-		return value;
+		let pending = this.loading.get(key);
+		if (!pending) {
+			pending = load()
+				.catch((): Read<T> => ({ ok: false, reason: 'Reading the playbooks failed.' }))
+				.then((value) => {
+					if (value.ok) this.cache.set(key, { at: this.now(), value });
+					else this.cache.delete(key);
+					return value;
+				})
+				.finally(() => this.loading.delete(key));
+			this.loading.set(key, pending);
+		}
+		return pending as Promise<Read<T>>;
 	}
 
 	private async run(args: string[]): Promise<Read<unknown>> {
@@ -160,8 +208,14 @@ export class PlaybookReader {
 	}
 }
 
-const isSchema = (v: unknown) =>
-	!!v && typeof v === 'object' && (v as { schema?: unknown }).schema === 'fm-pack.v1';
+type Detection = { source: PlaybooksSource; retry: boolean };
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+	!!v && typeof v === 'object' && !Array.isArray(v);
+const isSchema = (v: unknown): v is Record<string, unknown> =>
+	isRecord(v) && v.schema === 'fm-pack.v1';
+const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const obj = (v: unknown) => (isRecord(v) ? v : {});
 
 /** An unbound project, as resolve reports one: nothing changes for its workers. */
 export const unbound = (project: string): PackResolve => ({
@@ -182,27 +236,112 @@ export const unbound = (project: string): PackResolve => ({
 	readiness: { ok: true, note: 'no pack bound', missing: [], warnings: [], refusals: [] }
 });
 
-/** Fill the lists a reader relies on, so an older or partial answer still renders. */
+/** One listed pack with every field the views read filled in. */
+function packWithDefaults(raw: unknown): PackListEntry {
+	const p = obj(raw);
+	const c = obj(p.contents);
+	const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+	const s = isRecord(p.source) ? p.source : null;
+	return {
+		...(p as unknown as PackListEntry),
+		name: String(p.name ?? '?'),
+		version: String(p.version ?? '?'),
+		digest: String(p.digest ?? ''),
+		source: s
+			? {
+					repo: String(s.repo ?? ''),
+					commit: String(s.commit ?? ''),
+					...(s.path ? { path: String(s.path) } : {})
+				}
+			: null,
+		installed_at: typeof p.installed_at === 'string' ? p.installed_at : null,
+		contents: { skills: n(c.skills), hooks: n(c.hooks), mcp: n(c.mcp) },
+		risk: arr<unknown>(p.risk).map(String),
+		update: isRecord(p.update) ? (p.update as PackListEntry['update']) : null,
+		bound_projects: arr<unknown>(p.bound_projects)
+			.filter(isRecord)
+			.map((b) => ({ project: String(b.project ?? ''), digest: String(b.digest ?? '') }))
+	};
+}
+
+function listWithDefaults(l: PackList): PackList {
+	return { ...l, packs: arr<unknown>(l.packs).filter(isRecord).map(packWithDefaults) };
+}
+
+/** An item's delivery as a map or one value; anything else counts as unknown (an empty map). */
+const delivery = (v: unknown) =>
+	typeof v === 'string' || isRecord(v) ? (v as ResolvedItem['delivery']) : {};
+
+const itemWithDefaults = (raw: unknown): ResolvedItem => {
+	const i = obj(raw);
+	return {
+		...i,
+		id: String(i.id ?? '?'),
+		origin: (i.origin ?? 'pack') as ResolvedItem['origin'],
+		delivery: delivery(i.delivery)
+	};
+};
+
+const skillWithDefaults = (raw: unknown): ResolvedSkill => {
+	const s = obj(raw);
+	return {
+		...(s as unknown as ResolvedSkill),
+		id: String(s.id ?? s.name ?? '?'),
+		name: String(s.name ?? s.id ?? '?'),
+		phase: (['build', 'verify', 'review', 'task'].includes(s.phase as string)
+			? s.phase
+			: 'task') as ResolvedSkill['phase'],
+		source: String(s.source ?? ''),
+		origin: (s.origin ?? 'pack') as ResolvedSkill['origin'],
+		state: s.state === 'disabled' ? 'disabled' : 'active',
+		conditional: isRecord(s.conditional) ? (s.conditional as ResolvedSkill['conditional']) : null,
+		delivery: delivery(s.delivery)
+	};
+};
+
+/** Fill every field a view reads, per item too, so an older or partial answer still renders. */
 function withDefaults(r: PackResolve): PackResolve {
-	const rd = r.readiness ?? { ok: true, missing: [], warnings: [], refusals: [] };
+	const rd = obj(r.readiness);
+	const b = isRecord(r.binding) ? r.binding : null;
 	return {
 		...r,
-		binding: r.binding ?? null,
-		banned: r.banned ?? [],
-		hooks: r.hooks ?? [],
-		mcp: r.mcp ?? [],
-		settings_keys: r.settings_keys ?? [],
-		verify_commands: r.verify_commands ?? [],
-		preamble: r.preamble ?? null,
-		model_hint: r.model_hint ?? null,
-		evidence: r.evidence ?? null,
-		project_settings: r.project_settings ?? null,
-		ignored: r.ignored ?? [],
+		binding: b
+			? {
+					pack: String(b.pack ?? '?'),
+					version: String(b.version ?? '?'),
+					digest: String(b.digest ?? ''),
+					binding_digest: String(b.binding_digest ?? '')
+				}
+			: null,
+		skills: arr<unknown>(r.skills).filter(isRecord).map(skillWithDefaults),
+		banned: arr<unknown>(r.banned).filter(isRecord).map(itemWithDefaults),
+		hooks: arr<unknown>(r.hooks).filter(isRecord).map(itemWithDefaults),
+		mcp: arr<unknown>(r.mcp).filter(isRecord).map(itemWithDefaults),
+		settings_keys: arr<unknown>(r.settings_keys).map(String),
+		verify_commands: arr<unknown>(r.verify_commands)
+			.filter(isRecord)
+			.map((v) => ({
+				id: String(v.id ?? '?'),
+				cmd: String(v.cmd ?? ''),
+				origin: (v.origin ?? 'pack') as PackResolve['verify_commands'][number]['origin']
+			})),
+		preamble: isRecord(r.preamble) ? (r.preamble as PackResolve['preamble']) : null,
+		model_hint: isRecord(r.model_hint) ? (r.model_hint as PackResolve['model_hint']) : null,
+		evidence: isRecord(r.evidence)
+			? { required: arr<unknown>(r.evidence.required).map(String) }
+			: null,
+		project_settings: isRecord(r.project_settings)
+			? (r.project_settings as PackResolve['project_settings'])
+			: null,
+		ignored: arr<unknown>(r.ignored)
+			.filter(isRecord)
+			.map((x) => ({ item: String(x.item ?? '?'), reason: String(x.reason ?? '') })),
 		readiness: {
-			...rd,
-			missing: rd.missing ?? [],
-			warnings: rd.warnings ?? [],
-			refusals: rd.refusals ?? []
+			...(rd as Partial<PackResolve['readiness']>),
+			ok: rd.ok !== false,
+			missing: arr<unknown>(rd.missing).map(String),
+			warnings: arr<PackResolve['readiness']['warnings'][number]>(rd.warnings),
+			refusals: arr<PackResolve['readiness']['refusals'][number]>(rd.refusals)
 		}
 	};
 }

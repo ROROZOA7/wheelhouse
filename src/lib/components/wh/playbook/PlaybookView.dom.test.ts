@@ -79,4 +79,15 @@ describe('PlaybookView', () => {
 		expect(box.textContent).toContain('digest-mismatch');
 		expect(box.textContent).toContain('Missing skill: tdd');
 	});
+
+	it('shows refusals even when no binding is present', () => {
+		const el = render({
+			...unbound('wheelhouse'),
+			readiness: { ok: false, missing: [], warnings: [], refusals: ['binding-invalid'] }
+		});
+		expect(el.querySelector('[data-readiness="refused"]')?.textContent).toContain(
+			'binding-invalid'
+		);
+		expect(el.querySelector('[data-unbound]')).not.toBeNull();
+	});
 });
