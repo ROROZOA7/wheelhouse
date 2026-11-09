@@ -1,4 +1,5 @@
-import { open, readdir, readFile, stat } from 'node:fs/promises';
+import { open, readdir, readFile, stat, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { runBounded } from './exec';
 import { readWorkerEvidence } from './worker-evidence';
@@ -576,6 +577,19 @@ export class EvidenceReader {
 		const worker = recordedWorker
 			? { ...recordedWorker, problems: [...recordedWorker.problems] }
 			: null;
+		if (worker?.head && !worktree) {
+			const head = await recordedDoneHead(this.dataDir, task.id);
+			if (!head || head !== worker.head) {
+				worker.ok = false;
+				worker.problems.push({
+					code: 'head-mismatch',
+					path: 'head_sha',
+					detail: head
+						? 'Evidence head_sha differs from the recorded local done head.'
+						: 'No authoritative task head is available; evidence freshness is unknown.'
+				});
+			}
+		}
 		if (worker?.head && worktree) {
 			const head = await git(worktree, ['rev-parse', '--verify', 'HEAD'], this.env);
 			if (!head.ok || head.stdout.trim() !== worker.head) {
@@ -665,6 +679,43 @@ async function git(
 		timeoutMs: 8000,
 		maxOutputBytes: maxBytes
 	});
+}
+
+/** Firstmate latches exactly one local_done_head in state/<task>.meta on accepted completion. */
+async function recordedDoneHead(dataDir: string, id: string): Promise<string | null> {
+	if (!TASK_ID.test(id)) return null;
+	try {
+		const root = await realpath(path.join(path.dirname(dataDir), 'state'));
+		const file = await realpath(path.join(root, `${id}.meta`));
+		if (!file.startsWith(root + path.sep)) return null;
+		const handle = await open(
+			file,
+			constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+		);
+		try {
+			const st = await handle.stat();
+			if (!st.isFile() || st.size > 64 * 1024) return null;
+			const bytes = Buffer.alloc(64 * 1024 + 1);
+			let n = 0;
+			while (n < bytes.length) {
+				const chunk = await handle.read(bytes, n, bytes.length - n, n);
+				if (!chunk.bytesRead) break;
+				n += chunk.bytesRead;
+			}
+			if (n > 64 * 1024) return null;
+			const heads = bytes
+				.subarray(0, n)
+				.toString('utf8')
+				.split('\n')
+				.filter((l) => l.startsWith('local_done_head='));
+			const head = heads.length === 1 ? heads[0].slice('local_done_head='.length) : '';
+			return /^[a-f0-9]{40,64}$/i.test(head) ? head : null;
+		} finally {
+			await handle.close();
+		}
+	} catch {
+		return null;
+	}
 }
 
 async function readDiff(worktree: string, env: NodeJS.ProcessEnv, recordedBase?: string) {

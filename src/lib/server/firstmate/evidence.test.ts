@@ -51,6 +51,45 @@ it('starts worker evidence while independent evidence is still pending', async (
 	await pending;
 });
 
+describe('archived worker evidence freshness', () => {
+	it.each(['matching', 'different', 'unknown', 'duplicate'] as const)(
+		'%s recorded done head without a worktree',
+		async (mode) => {
+			const head = 'a'.repeat(40);
+			writeFileSync(
+				path.join(data, 't-1', 'pack.json'),
+				JSON.stringify({ verify_commands: [{ id: 'test', cmd: 'example-test' }] })
+			);
+			writeFileSync(
+				path.join(data, 't-1', 'evidence.json'),
+				JSON.stringify({
+					schema: 'fm-evidence.v1',
+					task: 't-1',
+					pack: 'example',
+					head_sha: head,
+					verify_commands: [{ id: 'test', cmd: 'example-test', exit: 0 }],
+					decisions: []
+				})
+			);
+			mkdirSync(path.join(dir, 'state'));
+			if (mode !== 'unknown')
+				writeFileSync(
+					path.join(dir, 'state', 't-1.meta'),
+					`local_done_head=${mode === 'different' ? 'b'.repeat(40) : head}\n${mode === 'duplicate' ? `local_done_head=${head}\n` : ''}`
+				);
+			const result = await reader().evidence(
+				{ id: 't-1', status: 'done', current: null } as TaskSummary,
+				null
+			);
+			expect(result.worker?.ok).toBe(mode === 'matching');
+			if (mode !== 'matching')
+				expect(result.worker?.problems).toContainEqual(
+					expect.objectContaining({ code: 'head-mismatch' })
+				);
+		}
+	);
+});
+
 describe('screenshots', () => {
 	it('lists the worker’s images first, then no-mistakes run evidence', async () => {
 		writeFileSync(path.join(data, 't-1', 'screenshots', 'a.png'), 'x');
