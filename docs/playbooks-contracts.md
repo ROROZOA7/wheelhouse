@@ -189,11 +189,17 @@ Wheelhouse may read files directly under `data/.packs/<name>/<version>/<hex>/`; 
   - `binding-invalid`
   - `unknown-condition`
 - **Warnings:** `unverifiable` (allow_global visibility can't be checked in Phase A).
+- **Installed-tree faults** all report `digest-mismatch`, with a `reason`: `content-changed|link-unsafe|mode-unsafe|tree-unreadable|tree-changed|path-unsafe|pack-oversized|manifest-mismatch|duplicate-install|<manifest-invalid code>`. The remedy for every one of them is to reinstall.
+- **Version label:** the pack is found by name + digest across version dirs. If its manifest version differs from the binding's label, resolve reports the pack's version plus a `version-label` warning.
+- **Unbound project:** `project_settings:null`.
+- **Install-time refusals** (source tree): `link-unsafe`, `license-missing`, `settings-unsupported`, `plugin-name-mismatch`, `requires-unsupported`, `missing-skill`, `manifest-invalid` (including allow_global without a fallback), `path-unsafe`, `pack-oversized`, `source-unavailable`.
+- **render-brief** refuses with `preamble-unsafe` when a preamble line matches `^\s*Delivery contract:` (exit 3).
 
 ### diff
 `fm-pack.sh diff <project> --to <name>@<version>#<digest> --json` →
 `{schema, from, to, changes:[{kind:"skill"|"verify"|"preamble"|"hook"|"mcp"|"setting"|"banned", op:"add"|"remove"|"change", id, before?, after?, text_diff?}], risk_changes:[…], requires_captain:bool}`
-- `requires_captain` is true when hooks, mcp, settings or banned change.
+- `changes[]` covers **every file** in both trees, compared by per-file mode + sha256. `kind` adds `policy|skill-file|manifest|file`, and executables are flagged.
+- `requires_captain` is true when hooks, mcp, settings, banned, policy or the preamble change, when any executable changes, or when a risk flag changes.
 - `text_diff` is a unified diff, cut at 64 KB.
 
 ### render-brief
